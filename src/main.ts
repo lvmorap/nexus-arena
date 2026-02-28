@@ -11,6 +11,8 @@ import { TransitionScene } from './scenes/TransitionScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { DarkShotGame, DarkShotScore } from './minigames/DarkShot/DarkShotGame';
 import { FluxArenaGame, FluxArenaScore } from './minigames/FluxArena/FluxArenaGame';
+import { MirrorRaceGame, MirrorRaceScore } from './minigames/MirrorRace/MirrorRaceGame';
+import { GhostRecorder } from './minigames/MirrorRace/GhostRecorder';
 import { logger } from './utils/Logger';
 
 class NexusArena {
@@ -18,16 +20,19 @@ class NexusArena {
   private _stateMachine: GameStateMachine;
   private _input: InputManager;
   private _fluxEngine: FluxEngine;
+  private _ghostRecorder: GhostRecorder;
 
   // Track cumulative scores across mini-games
   private _totalPlayerScore = 0;
   private _totalAiScore = 0;
+  private _playerLaneBias = 0;
 
   // Active scenes (only one at a time)
   private _menuScene: MenuScene | null = null;
   private _darkShotGame: DarkShotGame | null = null;
   private _transitionScene: TransitionScene | null = null;
   private _fluxArenaGame: FluxArenaGame | null = null;
+  private _mirrorRaceGame: MirrorRaceGame | null = null;
   private _resultsScene: ResultsScene | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -35,6 +40,7 @@ class NexusArena {
     this._stateMachine = new GameStateMachine();
     this._input = new InputManager(canvas);
     this._fluxEngine = new FluxEngine();
+    this._ghostRecorder = new GhostRecorder();
 
     this._engine.startRenderLoop();
   }
@@ -50,7 +56,9 @@ class NexusArena {
     // Reset cumulative scores for new playthrough
     this._totalPlayerScore = 0;
     this._totalAiScore = 0;
+    this._playerLaneBias = 0;
     this._fluxEngine = new FluxEngine();
+    this._ghostRecorder = new GhostRecorder();
 
     this._stateMachine.transitionTo('MENU');
     this._menuScene = new MenuScene(this._engine);
@@ -143,6 +151,48 @@ class NexusArena {
       totalScore: score.player,
     });
 
+    // Track player lane bias from FluxArena position for MirrorRace track generation
+    this._playerLaneBias = avgPos > 0.5 ? 0.3 : -0.3;
+
+    // Compute mutations for display
+    const mutations = this._fluxEngine.computeMutations();
+
+    // Show transition before MirrorRace
+    this._showTransition('ROUND 2: FLUX ARENA', score.player, score.ai, mutations, () => {
+      this._startMirrorRace();
+    });
+  }
+
+  /* ---- ROUND 3: MIRROR RACE ---- */
+
+  private _startMirrorRace(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('MIRROR_RACE');
+    this._mirrorRaceGame = new MirrorRaceGame(
+      this._engine,
+      this._input,
+      this._ghostRecorder,
+      this._playerLaneBias
+    );
+    this._mirrorRaceGame.setup((score: MirrorRaceScore) => {
+      this._onMirrorRaceComplete(score);
+    });
+    this._engine.setScene(this._mirrorRaceGame.scene);
+  }
+
+  private _onMirrorRaceComplete(score: MirrorRaceScore): void {
+    this._totalPlayerScore += score.player;
+    this._totalAiScore += score.ai;
+
+    // Update FluxEngine with MirrorRace data
+    this._fluxEngine.updateMirrorRaceHistory({
+      patternBreaks: score.patternBreaks,
+      crashes: score.crashes,
+      finishTime: score.finishTime,
+      totalScore: score.player,
+    });
+
     // Compute final mutations for results display
     const mutations = this._fluxEngine.computeMutations();
 
@@ -150,10 +200,10 @@ class NexusArena {
     const combinedScore: FluxArenaScore = {
       player: this._totalPlayerScore,
       ai: this._totalAiScore,
-      knockoffs: score.knockoffs,
-      selfKOs: score.selfKOs,
-      fluxEventsExploited: score.fluxEventsExploited,
-      positionSamples: score.positionSamples,
+      knockoffs: 0,
+      selfKOs: 0,
+      fluxEventsExploited: 0,
+      positionSamples: [],
     };
 
     this._showResults(combinedScore, mutations);
@@ -193,6 +243,10 @@ class NexusArena {
     if (this._fluxArenaGame) {
       this._fluxArenaGame.dispose();
       this._fluxArenaGame = null;
+    }
+    if (this._mirrorRaceGame) {
+      this._mirrorRaceGame.dispose();
+      this._mirrorRaceGame = null;
     }
     if (this._resultsScene) {
       this._resultsScene.dispose();

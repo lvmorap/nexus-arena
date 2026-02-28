@@ -8,6 +8,7 @@ export type GamePhase =
   | 'PRE_GAME'
   | 'DARK_SHOT'
   | 'FLUX_ARENA'
+  | 'MIRROR_RACE'
   | 'TRANSITION'
   | 'RESULTS'
   | 'PAUSED';
