@@ -100,6 +100,9 @@ export class MirrorRaceGame {
   private _volleyOrbs: { mesh: Mesh; z: number; active: boolean }[] = [];
   private _lastVolleySpawnZ = 0;
 
+  // Dimensional windows in tunnel walls
+  private _dimensionalWindows: Mesh[] = [];
+
   // Ithalokk's Laugh Event
   private _laughEventTriggered = false;
   private _laughEventActive = false;
@@ -245,6 +248,48 @@ export class MirrorRaceGame {
       pLight.intensity = 0.6;
       pLight.range = 20;
     }
+
+    // Dimensional windows in tunnel walls showing parallel universes
+    const windowColors = [
+      new Color3(0.2, 0.8, 0.6),
+      new Color3(0.8, 0.2, 0.4),
+      new Color3(0.3, 0.3, 1.0),
+      new Color3(0.9, 0.7, 0.1),
+      new Color3(0.1, 0.6, 0.9),
+      new Color3(0.7, 0.1, 0.9),
+    ];
+    const windowInterval = 50;
+    const wallXPositions = [-4.8, 4.8];
+    for (const wallX of wallXPositions) {
+      for (let z = -windowInterval; z > -this._trackLength; z -= windowInterval) {
+        const colorIdx =
+          Math.abs(Math.round(z / windowInterval) + (wallX > 0 ? 3 : 0)) % windowColors.length;
+        const win = MeshBuilder.CreateBox(
+          `dimWindow_${wallX}_${z}`,
+          { width: 0.1, height: 1.5, depth: 2 },
+          this._scene,
+        );
+        win.position = new Vector3(wallX, 2, z);
+        const winMat = new StandardMaterial(`dimWindowMat_${wallX}_${z}`, this._scene);
+        winMat.emissiveColor = windowColors[colorIdx];
+        winMat.disableLighting = true;
+        winMat.alpha = 0.5;
+        win.material = winMat;
+        this._dimensionalWindows.push(win);
+      }
+    }
+
+    // Pulse animation for dimensional windows
+    this._scene.registerBeforeRender(() => {
+      const t = performance.now() * 0.001;
+      for (let i = 0; i < this._dimensionalWindows.length; i++) {
+        const win = this._dimensionalWindows[i];
+        const mat = win.material as StandardMaterial;
+        if (mat) {
+          mat.alpha = 0.4 + Math.sin(t * 0.8 + i * 0.5) * 0.1;
+        }
+      }
+    });
   }
 
   private _createTunnelWall(side: string, xPos: number): Mesh {
@@ -886,6 +931,10 @@ export class MirrorRaceGame {
       if (!vo.mesh.isDisposed()) vo.mesh.dispose();
     }
     this._volleyOrbs = [];
+    for (const win of this._dimensionalWindows) {
+      if (!win.isDisposed()) win.dispose();
+    }
+    this._dimensionalWindows = [];
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();

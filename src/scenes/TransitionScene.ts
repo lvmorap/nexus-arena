@@ -17,6 +17,7 @@ import {
 } from '@babylonjs/gui';
 import { Engine } from '../core/Engine';
 import { RuleMutation } from '../ai/FluxEngine';
+import { VillainMeshFactory } from '../entities/VillainMeshFactory';
 import { COLORS } from '../constants/Colors';
 import { hexToRgb } from '../utils/MathUtils';
 import { logger } from '../utils/Logger';
@@ -189,6 +190,9 @@ export class TransitionScene {
       panel.addControl(mutHeader);
 
       // D'Anielor's dialogue during FluxEngine mutation reveal
+      // D'Anielor's Eye of the Void icon during mutation reveal
+      VillainMeshFactory.createEyeOfTheVoid(this._scene, new Vector3(0, 3, -5));
+
       const danielorText = new TextBlock('danielor');
       danielorText.text = '"YOUR PATTERN IS NOTED. THE ARENA HAS BEEN INFORMED." — D\'ANIELOR';
       danielorText.color = COLORS.NEXARI_GOLD;

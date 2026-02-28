@@ -19,6 +19,7 @@ import { ScreenShake } from '../../utils/ScreenShake';
 import { NexariAdaptiveAI } from '../../ai/NexariAdaptiveAI';
 import { RuleMutator, FluxEventType } from './RuleMutator';
 import { RuleMutation } from '../../ai/FluxEngine';
+import { VillainMeshFactory } from '../../entities/VillainMeshFactory';
 import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, distanceXZ } from '../../utils/MathUtils';
@@ -294,6 +295,13 @@ export class FluxArenaGame {
       starMat.disableLighting = true;
       star.material = starMat;
     }
+
+    // Xebasthiaan's hologram orbiting the platform
+    VillainMeshFactory.createXebasthiaanHologram(
+      this._scene,
+      Vector3.Zero(),
+      this._arenaRadius + 3,
+    );
   }
 
   private _buildPlayer(): void {
