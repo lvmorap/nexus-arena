@@ -5,11 +5,17 @@ export class AccessibilityManager {
   private _reducedMotion = false;
   private _highContrast = false;
   private _keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _motionMediaQuery: MediaQueryList | null = null;
   private _onColorBlindToggle: (() => void)[] = [];
   private _onHighContrastToggle: (() => void)[] = [];
 
   constructor() {
-    this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this._reducedMotion = this._motionMediaQuery.matches;
+    this._motionMediaQuery.addEventListener('change', (e) => {
+      this._reducedMotion = e.matches;
+      logger.info(`Reduced motion preference changed: ${this._reducedMotion ? 'ON' : 'OFF'}`);
+    });
     if (this._reducedMotion) {
       logger.info('Reduced motion preference detected');
     }

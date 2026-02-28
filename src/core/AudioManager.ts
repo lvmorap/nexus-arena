@@ -36,8 +36,8 @@ export class AudioManager {
         this._sfxGain = this._ctx.createGain();
         this._sfxGain.connect(this._masterGain);
         this._updateGains();
-      } catch {
-        logger.info('Web Audio API not available');
+      } catch (e) {
+        logger.info(`Web Audio API not available: ${e instanceof Error ? e.message : 'unknown error'}`);
         return null;
       }
     }
@@ -290,7 +290,7 @@ export class AudioManager {
       try {
         g.gain.cancelScheduledValues(now);
         g.gain.setValueAtTime(g.gain.value, now);
-        g.gain.value = 0;
+        g.gain.linearRampToValueAtTime(0, now + 0.01);
       } catch { /* already stopped */ }
     }
     for (const o of this._currentMusic.oscillators) {
