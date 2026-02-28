@@ -1,0 +1,955 @@
+import {
+  Scene,
+  Vector3,
+  Color3,
+  Color4,
+  MeshBuilder,
+  StandardMaterial,
+  HemisphericLight,
+  PointLight,
+  ArcRotateCamera,
+  Mesh,
+  GlowLayer,
+} from '@babylonjs/core';
+import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
+import { Engine } from '../../core/Engine';
+import { InputManager } from '../../core/InputManager';
+import { COLORS } from '../../constants/Colors';
+import { GAME_CONFIG } from '../../constants/GameConfig';
+import { hexToRgb, randomRange, clamp } from '../../utils/MathUtils';
+import { logger } from '../../utils/Logger';
+
+export interface DarkShotScore {
+  player: number;
+  ai: number;
+  blindPockets: number;
+  litPockets: number;
+  scratches: number;
+  avgShotPower: number;
+  totalShots: number;
+}
+
+interface Orb {
+  mesh: Mesh;
+  velocity: Vector3;
+  light: PointLight;
+  isCue: boolean;
+  isActive: boolean;
+}
+
+interface Portal {
+  mesh: Mesh;
+  torusMesh: Mesh;
+  position: Vector3;
+}
+
+type TurnOwner = 'player' | 'ai';
+type ShotPhase = 'countdown' | 'aiming' | 'shooting' | 'ai_turn' | 'ended';
+
+export class DarkShotGame {
+  private _scene: Scene;
+  private _engine: Engine;
+  private _input: InputManager;
+  private _camera!: ArcRotateCamera;
+
+  // Game objects
+  private _table!: Mesh;
+  private _orbs: Orb[] = [];
+  private _cueOrb!: Orb;
+  private _portals: Portal[] = [];
+
+  // Game state
+  private _score: DarkShotScore = {
+    player: 0,
+    ai: 0,
+    blindPockets: 0,
+    litPockets: 0,
+    scratches: 0,
+    avgShotPower: 0,
+    totalShots: 0,
+  };
+  private _currentRound = 1;
+  private _currentTurn: TurnOwner = 'player';
+  private _phase: ShotPhase = 'countdown';
+  private _totalPowerSum = 0;
+  private _onComplete: ((score: DarkShotScore) => void) | null = null;
+
+  // Aiming state
+  private _isAiming = false;
+  private _aimStartX = 0;
+  private _aimStartZ = 0;
+  private _aimEndX = 0;
+  private _aimEndZ = 0;
+
+  // Pointer handlers (stored for cleanup)
+  private _pointerDownHandler: ((e: PointerEvent) => void) | null = null;
+  private _pointerMoveHandler: ((e: PointerEvent) => void) | null = null;
+  private _pointerUpHandler: ((e: PointerEvent) => void) | null = null;
+
+  // UI
+  private _guiTexture!: AdvancedDynamicTexture;
+  private _scoreText!: TextBlock;
+  private _turnText!: TextBlock;
+  private _roundText!: TextBlock;
+  private _announcementText!: TextBlock;
+  private _instructionText!: TextBlock;
+
+  // Countdown
+  private _countdownStartTime = 0;
+
+  // AI
+  private _aiDelayTimer = 0;
+  private _aiHasShot = false;
+
+  // Config shortcut
+  private readonly _cfg = GAME_CONFIG.DARK_SHOT;
+
+  constructor(engine: Engine, input: InputManager) {
+    this._engine = engine;
+    this._input = input;
+    this._scene = new Scene(this._engine.babylonEngine);
+    this._scene.clearColor = new Color4(0.02, 0.01, 0.03, 1);
+  }
+
+  public get scene(): Scene {
+    return this._scene;
+  }
+
+  public async setup(onComplete: (score: DarkShotScore) => void): Promise<void> {
+    this._onComplete = onComplete;
+    this._buildEnvironment();
+    this._buildTable();
+    this._buildPortals();
+    this._buildOrbs();
+    this._buildUI();
+    this._setupPointerInput();
+    this._startCountdown();
+
+    this._scene.registerBeforeRender(() => {
+      const dt = this._scene.getEngine().getDeltaTime() / 1000;
+      this._update(dt);
+    });
+
+    logger.info('DarkShot setup complete');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Environment                                                        */
+  /* ------------------------------------------------------------------ */
+
+  private _buildEnvironment(): void {
+    this._camera = new ArcRotateCamera(
+      'camera',
+      -Math.PI / 2,
+      Math.PI / 4,
+      25,
+      Vector3.Zero(),
+      this._scene,
+    );
+    this._camera.lowerRadiusLimit = 15;
+    this._camera.upperRadiusLimit = 40;
+    this._camera.attachControl(this._engine.canvas, false);
+
+    // Very dim ambient light (darkness theme)
+    const hemiLight = new HemisphericLight('hemi', new Vector3(0, 1, 0), this._scene);
+    hemiLight.intensity = 0.15;
+    hemiLight.diffuse = new Color3(0.2, 0.2, 0.3);
+
+    // Glow layer for portals & orbs
+    const glow = new GlowLayer('glow', this._scene);
+    glow.intensity = 0.8;
+
+    // Starfield
+    for (let i = 0; i < 200; i++) {
+      const star = MeshBuilder.CreateSphere(
+        `star_${i}`,
+        { diameter: 0.1 + Math.random() * 0.15 },
+        this._scene,
+      );
+      star.position = new Vector3(
+        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * 60 + 20,
+        (Math.random() - 0.5) * 100,
+      );
+      const mat = new StandardMaterial(`starMat_${i}`, this._scene);
+      mat.emissiveColor = new Color3(
+        0.7 + Math.random() * 0.3,
+        0.7 + Math.random() * 0.3,
+        1,
+      );
+      mat.disableLighting = true;
+      star.material = mat;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Table                                                              */
+  /* ------------------------------------------------------------------ */
+
+  private _buildTable(): void {
+    const shape: Vector3[] = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * 2 * Math.PI) / 6;
+      shape.push(
+        new Vector3(
+          Math.cos(angle) * this._cfg.TABLE_RADIUS,
+          0,
+          Math.sin(angle) * this._cfg.TABLE_RADIUS,
+        ),
+      );
+    }
+
+    this._table = MeshBuilder.CreatePolygon(
+      'table',
+      { shape, depth: this._cfg.TABLE_DEPTH },
+      this._scene,
+    );
+    this._table.position.y = -this._cfg.TABLE_DEPTH / 2;
+
+    const tableMat = new StandardMaterial('tableMat', this._scene);
+    const fc = hexToRgb(COLORS.DEEP_SPACE);
+    tableMat.diffuseColor = new Color3(fc.r, fc.g, fc.b);
+    tableMat.emissiveColor = new Color3(0.01, 0.02, 0.04);
+    tableMat.specularColor = new Color3(0.05, 0.05, 0.1);
+    this._table.material = tableMat;
+
+    // Edge lines
+    const purple = hexToRgb(COLORS.NEXARI_PURPLE);
+    for (let i = 0; i < 6; i++) {
+      const a1 = (i * 2 * Math.PI) / 6;
+      const a2 = ((i + 1) * 2 * Math.PI) / 6;
+      const p1 = new Vector3(Math.cos(a1) * this._cfg.TABLE_RADIUS, 0.05, Math.sin(a1) * this._cfg.TABLE_RADIUS);
+      const p2 = new Vector3(Math.cos(a2) * this._cfg.TABLE_RADIUS, 0.05, Math.sin(a2) * this._cfg.TABLE_RADIUS);
+      const edge = MeshBuilder.CreateTube(
+        `edge_${i}`,
+        { path: [p1, p2], radius: 0.06, tessellation: 6 },
+        this._scene,
+      );
+      const eMat = new StandardMaterial(`edgeMat_${i}`, this._scene);
+      eMat.emissiveColor = new Color3(purple.r * 0.3, purple.g * 0.3, purple.b * 0.3);
+      eMat.disableLighting = true;
+      edge.material = eMat;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Portals                                                            */
+  /* ------------------------------------------------------------------ */
+
+  private _buildPortals(): void {
+    const purple = hexToRgb(COLORS.NEXARI_PURPLE);
+
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * 2 * Math.PI) / 6;
+      const pos = new Vector3(
+        Math.cos(angle) * this._cfg.TABLE_RADIUS,
+        0.2,
+        Math.sin(angle) * this._cfg.TABLE_RADIUS,
+      );
+
+      // Glowing sphere
+      const sphere = MeshBuilder.CreateSphere(
+        `portal_${i}`,
+        { diameter: this._cfg.PORTAL_RADIUS },
+        this._scene,
+      );
+      sphere.position = pos.clone();
+      const sMat = new StandardMaterial(`portalMat_${i}`, this._scene);
+      sMat.emissiveColor = new Color3(purple.r, purple.g, purple.b);
+      sMat.diffuseColor = new Color3(purple.r * 0.3, purple.g * 0.3, purple.b * 0.3);
+      sMat.alpha = 0.6;
+      sphere.material = sMat;
+
+      // Ring
+      const torus = MeshBuilder.CreateTorus(
+        `portalRing_${i}`,
+        { diameter: this._cfg.PORTAL_RADIUS * 1.5, thickness: 0.15, tessellation: 24 },
+        this._scene,
+      );
+      torus.position = pos.clone();
+      const tMat = new StandardMaterial(`torusMat_${i}`, this._scene);
+      tMat.emissiveColor = new Color3(purple.r, purple.g, purple.b);
+      tMat.disableLighting = true;
+      torus.material = tMat;
+
+      // Portal light
+      const pLight = new PointLight(`portalLight_${i}`, pos.clone(), this._scene);
+      pLight.diffuse = new Color3(purple.r, purple.g, purple.b);
+      pLight.intensity = 0.5;
+      pLight.range = 4;
+
+      this._portals.push({ mesh: sphere, torusMesh: torus, position: pos });
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Orbs                                                               */
+  /* ------------------------------------------------------------------ */
+
+  private _buildOrbs(): void {
+    this._cueOrb = this._createOrb('cueOrb', new Vector3(0, this._cfg.CUE_ORB_RADIUS, 3), true);
+    this._orbs.push(this._cueOrb);
+
+    const positions = [
+      new Vector3(0, this._cfg.ORB_RADIUS, -2),
+      new Vector3(1.5, this._cfg.ORB_RADIUS, -3),
+      new Vector3(-1.5, this._cfg.ORB_RADIUS, -3),
+      new Vector3(0.8, this._cfg.ORB_RADIUS, -4.5),
+      new Vector3(-0.8, this._cfg.ORB_RADIUS, -4.5),
+    ];
+
+    for (let i = 0; i < this._cfg.NUM_ORBS; i++) {
+      this._orbs.push(this._createOrb(`orb_${i}`, positions[i], false));
+    }
+  }
+
+  private _createOrb(name: string, position: Vector3, isCue: boolean): Orb {
+    const radius = isCue ? this._cfg.CUE_ORB_RADIUS : this._cfg.ORB_RADIUS;
+    const mesh = MeshBuilder.CreateSphere(
+      name,
+      { diameter: radius * 2, segments: 16 },
+      this._scene,
+    );
+    mesh.position = position.clone();
+
+    const mat = new StandardMaterial(`${name}Mat`, this._scene);
+    if (isCue) {
+      const c = hexToRgb(COLORS.PLAYER_CYAN);
+      mat.diffuseColor = new Color3(c.r, c.g, c.b);
+      mat.emissiveColor = new Color3(c.r * 0.4, c.g * 0.4, c.b * 0.4);
+    } else {
+      const c = hexToRgb(COLORS.NEXARI_GOLD);
+      mat.diffuseColor = new Color3(c.r, c.g, c.b);
+      mat.emissiveColor = new Color3(c.r * 0.3, c.g * 0.3, c.b * 0.3);
+    }
+    mat.specularColor = new Color3(1, 1, 1);
+    mesh.material = mat;
+
+    const light = new PointLight(`${name}Light`, position.clone(), this._scene);
+    if (isCue) {
+      const c = hexToRgb(COLORS.PLAYER_CYAN);
+      light.diffuse = new Color3(c.r, c.g, c.b);
+      light.intensity = 0.8;
+    } else {
+      const c = hexToRgb(COLORS.NEXARI_GOLD);
+      light.diffuse = new Color3(c.r, c.g, c.b);
+      light.intensity = 0.3;
+    }
+    light.range = 6;
+
+    return { mesh, velocity: Vector3.Zero(), light, isCue, isActive: true };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  UI                                                                 */
+  /* ------------------------------------------------------------------ */
+
+  private _buildUI(): void {
+    this._guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('UI', true, this._scene);
+
+    this._scoreText = new TextBlock('score');
+    this._scoreText.text = 'YOU: 0 | NEXARI: 0';
+    this._scoreText.color = COLORS.NEXARI_CYAN;
+    this._scoreText.fontSize = 28;
+    this._scoreText.fontFamily = 'Orbitron, sans-serif';
+    this._scoreText.top = '-45%';
+    this._scoreText.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+    this._guiTexture.addControl(this._scoreText);
+
+    this._turnText = new TextBlock('turn');
+    this._turnText.text = 'YOUR TURN';
+    this._turnText.color = COLORS.NEXARI_GOLD;
+    this._turnText.fontSize = 24;
+    this._turnText.fontFamily = 'Orbitron, sans-serif';
+    this._turnText.top = '-38%';
+    this._guiTexture.addControl(this._turnText);
+
+    this._roundText = new TextBlock('round');
+    this._roundText.text = 'Round 1/7';
+    this._roundText.color = COLORS.NEUTRAL;
+    this._roundText.fontSize = 20;
+    this._roundText.fontFamily = 'Rajdhani, sans-serif';
+    this._roundText.top = '-32%';
+    this._guiTexture.addControl(this._roundText);
+
+    this._announcementText = new TextBlock('announcement');
+    this._announcementText.text = '';
+    this._announcementText.color = COLORS.NEXARI_PURPLE;
+    this._announcementText.fontSize = 36;
+    this._announcementText.fontFamily = 'Orbitron, sans-serif';
+    this._announcementText.top = '0%';
+    this._announcementText.alpha = 0;
+    this._guiTexture.addControl(this._announcementText);
+
+    this._instructionText = new TextBlock('instructions');
+    this._instructionText.text = 'Click and drag from the cue orb to aim and shoot';
+    this._instructionText.color = COLORS.NEUTRAL;
+    this._instructionText.fontSize = 16;
+    this._instructionText.fontFamily = 'Rajdhani, sans-serif';
+    this._instructionText.top = '46%';
+    this._instructionText.alpha = 0.7;
+    this._guiTexture.addControl(this._instructionText);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Pointer / Aiming                                                   */
+  /* ------------------------------------------------------------------ */
+
+  private _setupPointerInput(): void {
+    const canvas = this._engine.canvas;
+
+    this._pointerDownHandler = (_e: PointerEvent): void => {
+      if (this._phase !== 'aiming' || this._currentTurn !== 'player') return;
+      const pick = this._scene.pick(this._scene.pointerX, this._scene.pointerY);
+      if (!pick?.hit || !pick.pickedPoint) return;
+
+      const dx = pick.pickedPoint.x - this._cueOrb.mesh.position.x;
+      const dz = pick.pickedPoint.z - this._cueOrb.mesh.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 2.0) {
+        this._isAiming = true;
+        this._aimStartX = this._cueOrb.mesh.position.x;
+        this._aimStartZ = this._cueOrb.mesh.position.z;
+        this._aimEndX = pick.pickedPoint.x;
+        this._aimEndZ = pick.pickedPoint.z;
+      }
+    };
+
+    this._pointerMoveHandler = (_e: PointerEvent): void => {
+      if (!this._isAiming) return;
+      const pick = this._scene.pick(this._scene.pointerX, this._scene.pointerY);
+      if (pick?.hit && pick.pickedPoint) {
+        this._aimEndX = pick.pickedPoint.x;
+        this._aimEndZ = pick.pickedPoint.z;
+        this._updateAimLine();
+      }
+    };
+
+    this._pointerUpHandler = (_e: PointerEvent): void => {
+      if (!this._isAiming) return;
+      this._isAiming = false;
+
+      const dx = this._aimEndX - this._aimStartX;
+      const dz = this._aimEndZ - this._aimStartZ;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+
+      if (distance < 0.3) {
+        this._clearAimLine();
+        return;
+      }
+
+      // Shot direction is opposite of drag
+      const dirX = -dx / distance;
+      const dirZ = -dz / distance;
+      const power = clamp(distance / 8, 0, 1) * this._cfg.MAX_SHOT_POWER;
+
+      this._shootCue(new Vector3(dirX, 0, dirZ), power);
+      this._clearAimLine();
+    };
+
+    canvas.addEventListener('pointerdown', this._pointerDownHandler);
+    canvas.addEventListener('pointermove', this._pointerMoveHandler);
+    canvas.addEventListener('pointerup', this._pointerUpHandler);
+  }
+
+  private _updateAimLine(): void {
+    this._clearAimLine();
+
+    const dx = this._aimEndX - this._aimStartX;
+    const dz = this._aimEndZ - this._aimStartZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 0.1) return;
+
+    // Direction opposite of drag
+    const dirX = -dx / dist;
+    const dirZ = -dz / dist;
+    const power = clamp(dist / 8, 0, 1);
+    const lineLen = power * 10;
+    const numSegs = 8;
+    const segLen = lineLen / numSegs;
+    const cueX = this._cueOrb.mesh.position.x;
+    const cueZ = this._cueOrb.mesh.position.z;
+    const cyan = hexToRgb(COLORS.PLAYER_CYAN);
+
+    for (let i = 0; i < numSegs; i += 2) {
+      const s = i * segLen;
+      const e = (i + 1) * segLen;
+      const p1 = new Vector3(cueX + dirX * s, 0.3, cueZ + dirZ * s);
+      const p2 = new Vector3(cueX + dirX * e, 0.3, cueZ + dirZ * e);
+
+      // Only draw in illuminated zones
+      const midX = (p1.x + p2.x) / 2;
+      const midZ = (p1.z + p2.z) / 2;
+      if (!this._isPointLit(midX, midZ)) continue;
+
+      const seg = MeshBuilder.CreateTube(
+        `aimSeg_${i}`,
+        { path: [p1, p2], radius: 0.04, tessellation: 6 },
+        this._scene,
+      );
+      const mat = new StandardMaterial(`aimSegMat_${i}`, this._scene);
+      mat.emissiveColor = new Color3(cyan.r, cyan.g, cyan.b);
+      mat.disableLighting = true;
+      mat.alpha = 0.6;
+      seg.material = mat;
+    }
+  }
+
+  private _clearAimLine(): void {
+    const toDispose = this._scene.meshes.filter((m) => m.name.startsWith('aimSeg_'));
+    for (const m of toDispose) {
+      m.dispose();
+    }
+  }
+
+  private _isPointLit(px: number, pz: number): boolean {
+    for (const orb of this._orbs) {
+      if (!orb.isActive) continue;
+      const dx = px - orb.mesh.position.x;
+      const dz = pz - orb.mesh.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 6) return true;
+    }
+    return false;
+  }
+
+  private _shootCue(direction: Vector3, power: number): void {
+    this._cueOrb.velocity = direction.scale(power);
+    this._cueOrb.velocity.y = 0;
+    this._phase = 'shooting';
+    this._totalPowerSum += power / this._cfg.MAX_SHOT_POWER;
+    this._score.totalShots++;
+    logger.info(`Player shot: power=${power.toFixed(2)}`);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Countdown                                                          */
+  /* ------------------------------------------------------------------ */
+
+  private _startCountdown(): void {
+    this._phase = 'countdown';
+    this._countdownStartTime = performance.now();
+
+    const text = new TextBlock('countdown');
+    text.text = '3';
+    text.color = COLORS.NEXARI_GOLD;
+    text.fontSize = 120;
+    text.fontFamily = 'Orbitron, sans-serif';
+    this._guiTexture.addControl(text);
+
+    const interval = setInterval(() => {
+      const elapsed = performance.now() - this._countdownStartTime;
+      if (elapsed < 1000) {
+        text.text = '3';
+      } else if (elapsed < 2000) {
+        text.text = '2';
+      } else if (elapsed < 3000) {
+        text.text = '1';
+      } else if (elapsed < 3800) {
+        text.text = 'BREAK!';
+        text.fontSize = 72;
+        text.color = COLORS.SUCCESS;
+      } else {
+        text.dispose();
+        clearInterval(interval);
+        this._phase = 'aiming';
+        logger.info('DarkShot match started!');
+      }
+    }, 100);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Main update loop                                                   */
+  /* ------------------------------------------------------------------ */
+
+  private _update(dt: number): void {
+    if (this._phase === 'countdown' || this._phase === 'ended') return;
+
+    const now = performance.now();
+
+    this._animatePortals(now);
+    this._updateOrbPhysics(dt);
+    this._updateOrbLights();
+    this._checkOrbCollisions();
+    this._checkTableBoundary();
+    this._checkPortalCollisions();
+
+    if (this._phase === 'shooting' && this._areAllOrbsStopped()) {
+      this._onShotComplete();
+    }
+
+    if (this._phase === 'ai_turn') {
+      this._updateAI(dt);
+    }
+
+    this._updateUI();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Physics & collisions                                               */
+  /* ------------------------------------------------------------------ */
+
+  private _animatePortals(now: number): void {
+    for (let i = 0; i < this._portals.length; i++) {
+      const pulse = 0.9 + Math.sin(now * 0.003 + i) * 0.1;
+      this._portals[i].torusMesh.scaling = new Vector3(pulse, pulse, pulse);
+    }
+  }
+
+  private _updateOrbPhysics(dt: number): void {
+    const damping = Math.pow(1 - this._cfg.LINEAR_DAMPING, dt * 60);
+
+    for (const orb of this._orbs) {
+      if (!orb.isActive) continue;
+      orb.velocity.scaleInPlace(damping);
+      orb.mesh.position.addInPlace(orb.velocity.scale(dt));
+
+      // Keep at table surface height
+      const r = orb.isCue ? this._cfg.CUE_ORB_RADIUS : this._cfg.ORB_RADIUS;
+      orb.mesh.position.y = r;
+
+      // Sync light
+      orb.light.position.copyFrom(orb.mesh.position);
+      orb.light.position.y += 0.5;
+
+      // Kill tiny velocities
+      if (orb.velocity.length() < this._cfg.MIN_VELOCITY_THRESHOLD) {
+        orb.velocity = Vector3.Zero();
+      }
+    }
+  }
+
+  private _updateOrbLights(): void {
+    for (const orb of this._orbs) {
+      if (!orb.isActive) {
+        orb.light.intensity = 0;
+        continue;
+      }
+      const speed = orb.velocity.length();
+      orb.light.intensity = orb.isCue
+        ? 0.8 + clamp(speed * 0.3, 0, 1.5)
+        : 0.3 + clamp(speed * 0.4, 0, 2.0);
+    }
+  }
+
+  private _checkOrbCollisions(): void {
+    for (let i = 0; i < this._orbs.length; i++) {
+      const a = this._orbs[i];
+      if (!a.isActive) continue;
+      for (let j = i + 1; j < this._orbs.length; j++) {
+        const b = this._orbs[j];
+        if (!b.isActive) continue;
+
+        const rA = a.isCue ? this._cfg.CUE_ORB_RADIUS : this._cfg.ORB_RADIUS;
+        const rB = b.isCue ? this._cfg.CUE_ORB_RADIUS : this._cfg.ORB_RADIUS;
+        const minDist = rA + rB;
+
+        const diff = a.mesh.position.subtract(b.mesh.position);
+        diff.y = 0;
+        const dist = diff.length();
+
+        if (dist < minDist && dist > 0.001) {
+          const normal = diff.normalize();
+          const relVel = a.velocity.subtract(b.velocity);
+          const velAlongNormal = Vector3.Dot(relVel, normal);
+          if (velAlongNormal > 0) continue; // already separating
+
+          const impulse = (-(1 + this._cfg.RESTITUTION) * velAlongNormal) / 2;
+          a.velocity.addInPlace(normal.scale(impulse));
+          b.velocity.addInPlace(normal.scale(-impulse));
+
+          // Separate overlapping orbs
+          const overlap = minDist - dist;
+          a.mesh.position.addInPlace(normal.scale(overlap / 2));
+          b.mesh.position.addInPlace(normal.scale(-overlap / 2));
+        }
+      }
+    }
+  }
+
+  private _checkTableBoundary(): void {
+    for (const orb of this._orbs) {
+      if (!orb.isActive) continue;
+
+      const dist = Math.sqrt(
+        orb.mesh.position.x * orb.mesh.position.x +
+          orb.mesh.position.z * orb.mesh.position.z,
+      );
+      const r = orb.isCue ? this._cfg.CUE_ORB_RADIUS : this._cfg.ORB_RADIUS;
+      const maxDist = this._cfg.TABLE_RADIUS - r;
+
+      // Allow orbs near portals to pass through (portal zones)
+      if (this._isNearPortal(orb.mesh.position)) continue;
+
+      if (dist > maxDist) {
+        const nx = orb.mesh.position.x / dist;
+        const nz = orb.mesh.position.z / dist;
+        const normal = new Vector3(nx, 0, nz);
+
+        const dot = Vector3.Dot(orb.velocity, normal);
+        if (dot > 0) {
+          orb.velocity.subtractInPlace(normal.scale(2 * dot));
+          orb.velocity.scaleInPlace(0.7);
+        }
+        orb.mesh.position.x = nx * maxDist;
+        orb.mesh.position.z = nz * maxDist;
+      }
+    }
+  }
+
+  private _isNearPortal(pos: Vector3): boolean {
+    for (const portal of this._portals) {
+      const dx = pos.x - portal.position.x;
+      const dz = pos.z - portal.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 1.5) return true;
+    }
+    return false;
+  }
+
+  private _checkPortalCollisions(): void {
+    for (const orb of this._orbs) {
+      if (!orb.isActive) continue;
+      for (const portal of this._portals) {
+        const dx = orb.mesh.position.x - portal.position.x;
+        const dz = orb.mesh.position.z - portal.position.z;
+        if (Math.sqrt(dx * dx + dz * dz) < 1.5) {
+          this._onOrbPocketed(orb);
+          break;
+        }
+      }
+    }
+  }
+
+  private _onOrbPocketed(orb: Orb): void {
+    if (orb.isCue) {
+      // Scratch
+      if (this._currentTurn === 'player') {
+        this._score.player -= 1;
+      } else {
+        this._score.ai -= 1;
+      }
+      this._score.scratches++;
+      this._showAnnouncement('SCRATCH! -1', COLORS.DANGER);
+      logger.info('Scratch! Cue orb pocketed');
+
+      // Reset cue
+      orb.velocity = Vector3.Zero();
+      orb.mesh.position = new Vector3(0, this._cfg.CUE_ORB_RADIUS, 3);
+      orb.light.position = orb.mesh.position.clone();
+      return;
+    }
+
+    // Determine pocket type
+    const pocketType = this._determinePocketType(orb);
+    let points: number;
+    let label: string;
+
+    if (pocketType === 'blind') {
+      points = 3;
+      label = 'BLIND PORTAL! +3';
+      this._score.blindPockets++;
+    } else if (pocketType === 'shadow') {
+      points = 2;
+      label = 'SHADOW PORTAL! +2';
+    } else {
+      points = 1;
+      label = 'LIT PORTAL! +1';
+      this._score.litPockets++;
+    }
+
+    if (this._currentTurn === 'player') {
+      this._score.player += points;
+    } else {
+      this._score.ai += points;
+    }
+
+    const color =
+      points >= 3 ? COLORS.NEXARI_GOLD : points >= 2 ? COLORS.NEXARI_PURPLE : COLORS.SUCCESS;
+    this._showAnnouncement(label, color);
+    logger.info(`Orb pocketed: ${pocketType}, ${this._currentTurn} +${points}`);
+
+    // Deactivate orb
+    orb.isActive = false;
+    orb.mesh.setEnabled(false);
+    orb.light.intensity = 0;
+    orb.velocity = Vector3.Zero();
+  }
+
+  private _determinePocketType(orb: Orb): 'blind' | 'shadow' | 'lit' {
+    let closestDist = Infinity;
+    for (const other of this._orbs) {
+      if (other === orb || !other.isActive) continue;
+      const dx = orb.mesh.position.x - other.mesh.position.x;
+      const dz = orb.mesh.position.z - other.mesh.position.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < closestDist) closestDist = d;
+    }
+
+    if (closestDist > this._cfg.BLIND_DISTANCE) return 'blind';
+    if (closestDist > this._cfg.BLIND_DISTANCE * 0.5) return 'shadow';
+    return 'lit';
+  }
+
+  private _areAllOrbsStopped(): boolean {
+    for (const orb of this._orbs) {
+      if (!orb.isActive) continue;
+      if (orb.velocity.length() > this._cfg.MIN_VELOCITY_THRESHOLD) return false;
+    }
+    return true;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Turn management                                                    */
+  /* ------------------------------------------------------------------ */
+
+  private _onShotComplete(): void {
+    const activeTargets = this._orbs.filter((o) => !o.isCue && o.isActive).length;
+
+    if (activeTargets === 0 || this._currentRound > this._cfg.TOTAL_ROUNDS) {
+      this._endMatch();
+      return;
+    }
+
+    if (this._currentTurn === 'player') {
+      this._currentTurn = 'ai';
+      this._phase = 'ai_turn';
+      this._aiDelayTimer = 0;
+      this._aiHasShot = false;
+    } else {
+      this._currentTurn = 'player';
+      this._currentRound++;
+
+      if (this._currentRound > this._cfg.TOTAL_ROUNDS) {
+        this._endMatch();
+        return;
+      }
+
+      this._phase = 'aiming';
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  AI                                                                 */
+  /* ------------------------------------------------------------------ */
+
+  private _updateAI(dt: number): void {
+    this._aiDelayTimer += dt * 1000;
+    if (this._aiDelayTimer >= this._cfg.AI_DELAY_MS && !this._aiHasShot) {
+      this._aiShoot();
+      this._aiHasShot = true;
+    }
+  }
+
+  private _aiShoot(): void {
+    // Pick target orb closest to any portal
+    let bestOrb: Orb | null = null;
+    let bestDist = Infinity;
+
+    for (const orb of this._orbs) {
+      if (orb.isCue || !orb.isActive) continue;
+      for (const portal of this._portals) {
+        const dx = orb.mesh.position.x - portal.position.x;
+        const dz = orb.mesh.position.z - portal.position.z;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        if (d < bestDist) {
+          bestDist = d;
+          bestOrb = orb;
+        }
+      }
+    }
+
+    if (!bestOrb) return;
+
+    // Direction from cue to target
+    const toTarget = bestOrb.mesh.position.subtract(this._cueOrb.mesh.position);
+    toTarget.y = 0;
+    const len = toTarget.length();
+    if (len < 0.01) return;
+    toTarget.scaleInPlace(1 / len);
+
+    // Add angular variance
+    const variance = randomRange(-this._cfg.AI_AIM_VARIANCE, this._cfg.AI_AIM_VARIANCE);
+    const cosV = Math.cos(variance);
+    const sinV = Math.sin(variance);
+    const aimDir = new Vector3(
+      toTarget.x * cosV - toTarget.z * sinV,
+      0,
+      toTarget.x * sinV + toTarget.z * cosV,
+    );
+
+    const power =
+      randomRange(this._cfg.AI_POWER_MIN, this._cfg.AI_POWER_MAX) * this._cfg.MAX_SHOT_POWER;
+    this._cueOrb.velocity = aimDir.scale(power);
+    this._phase = 'shooting';
+    this._totalPowerSum += power / this._cfg.MAX_SHOT_POWER;
+    this._score.totalShots++;
+
+    logger.info(`AI shot: power=${power.toFixed(2)}`);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Announcements & UI                                                 */
+  /* ------------------------------------------------------------------ */
+
+  private _showAnnouncement(text: string, color: string): void {
+    this._announcementText.text = text;
+    this._announcementText.color = color;
+    this._announcementText.alpha = 1;
+
+    let alpha = 1;
+    const fadeInterval = setInterval(() => {
+      alpha -= 0.02;
+      if (alpha <= 0) {
+        this._announcementText.alpha = 0;
+        clearInterval(fadeInterval);
+      } else {
+        this._announcementText.alpha = alpha;
+      }
+    }, 50);
+  }
+
+  private _updateUI(): void {
+    this._scoreText.text = `YOU: ${this._score.player} | NEXARI: ${this._score.ai}`;
+    this._roundText.text = `Round ${Math.min(this._currentRound, this._cfg.TOTAL_ROUNDS)}/${this._cfg.TOTAL_ROUNDS}`;
+
+    if (this._currentTurn === 'player') {
+      this._turnText.text = 'YOUR TURN';
+      this._turnText.color = COLORS.PLAYER_CYAN;
+    } else {
+      this._turnText.text = "NEXARI'S TURN";
+      this._turnText.color = COLORS.AI_MAGENTA;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  End                                                                */
+  /* ------------------------------------------------------------------ */
+
+  private _endMatch(): void {
+    this._phase = 'ended';
+    logger.info('DarkShot match ended');
+
+    const winner =
+      this._score.player >= this._score.ai ? 'HUMANITY PREVAILS!' : 'NEXARI TRIUMPH!';
+    this._showAnnouncement(
+      `${winner}\nFinal: ${this._score.player} - ${this._score.ai}`,
+      this._score.player >= this._score.ai ? COLORS.SUCCESS : COLORS.DANGER,
+    );
+
+    this._score.avgShotPower =
+      this._score.totalShots > 0 ? this._totalPowerSum / this._score.totalShots : 0;
+
+    setTimeout(() => {
+      if (this._onComplete) {
+        this._onComplete(this._score);
+      }
+    }, 3000);
+  }
+
+  public dispose(): void {
+    const canvas = this._engine.canvas;
+    if (this._pointerDownHandler) canvas.removeEventListener('pointerdown', this._pointerDownHandler);
+    if (this._pointerMoveHandler) canvas.removeEventListener('pointermove', this._pointerMoveHandler);
+    if (this._pointerUpHandler) canvas.removeEventListener('pointerup', this._pointerUpHandler);
+    this._guiTexture.dispose();
+    this._scene.dispose();
+  }
+}

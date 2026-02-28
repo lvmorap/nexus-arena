@@ -6,6 +6,7 @@ export type GamePhase =
   | 'MENU'
   | 'TUTORIAL'
   | 'PRE_GAME'
+  | 'DARK_SHOT'
   | 'FLUX_ARENA'
   | 'TRANSITION'
   | 'RESULTS'
