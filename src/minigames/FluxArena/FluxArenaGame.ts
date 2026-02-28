@@ -96,6 +96,20 @@ export class FluxArenaGame {
   private _hasCenterWeakness = false;
   private _fluxEventInterval: number = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
 
+  // Shield orb
+  private _shieldOrbMesh: Mesh | null = null;
+  private _shieldActive = false;
+
+  // Nexari summon (second AI)
+  private _summonMesh: Mesh | null = null;
+  private _summonVelocity = Vector3.Zero();
+
+  // Portal escape visual markers
+  private _portalEscapeMeshes: Mesh[] = [];
+
+  // Combo knock tracking
+  private _recentKnockoffTimes: number[] = [];
+
   // Rule overlay
   private _ruleOverlay: TextBlock | null = null;
   private _ruleOverlayVisible = false;
@@ -560,6 +574,57 @@ export class FluxArenaGame {
       this._aiVelocity.z += shake2 * 0.7 * dt * 60;
     }
 
+    // Shield orb bob and pickup
+    if (this._shieldOrbMesh && !this._shieldOrbMesh.isDisposed()) {
+      this._shieldOrbMesh.position.y = 1.5 + Math.sin(now * 0.004) * 0.5;
+      const orbDist = distanceXZ(this._playerMesh.position, this._shieldOrbMesh.position);
+      if (orbDist < 2) {
+        this._shieldActive = true;
+        this._shieldOrbMesh.dispose();
+        this._shieldOrbMesh = null;
+        this._showFluxText('SHIELD ACQUIRED!', COLORS.SUCCESS);
+        logger.info('FluxArena: Player grabbed shield orb');
+      }
+    }
+
+    // Nexari summon AI movement
+    if (this._summonMesh && !this._summonMesh.isDisposed()) {
+      if (this._hasEffect('NEXARI_SUMMON')) {
+        const toPlayer = this._playerMesh.position.subtract(this._summonMesh.position);
+        const summonDist = toPlayer.length();
+        if (summonDist > 0.5) {
+          toPlayer.normalize();
+          const halfSpeed = GAME_CONFIG.FLUX_ARENA.PLAYER_SPEED * 0.425;
+          this._summonVelocity.x += (toPlayer.x * halfSpeed - this._summonVelocity.x) * Math.min(1, 4 * dt);
+          this._summonVelocity.z += (toPlayer.z * halfSpeed - this._summonVelocity.z) * Math.min(1, 4 * dt);
+        }
+        this._summonVelocity.scaleInPlace(damping);
+        this._summonMesh.position.addInPlace(this._summonVelocity.scale(dt));
+        this._summonMesh.position.y = 1;
+
+        // Push collision
+        if (summonDist < 3) {
+          const pushDir = this._playerMesh.position.subtract(this._summonMesh.position).normalize();
+          const pushForce = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * 0.5 * (1 - summonDist / 3);
+          this._playerVelocity.addInPlace(pushDir.scale(pushForce * dt * 10));
+        }
+      } else {
+        this._summonMesh.dispose();
+        this._summonMesh = null;
+        this._summonVelocity = Vector3.Zero();
+        logger.info('FluxArena: Nexari summon expired');
+      }
+    }
+
+    // Clean up portal meshes when effect expires
+    if (this._portalEscapeMeshes.length > 0 && !this._hasEffect('PORTAL_ESCAPE')) {
+      for (const m of this._portalEscapeMeshes) {
+        m.dispose();
+      }
+      this._portalEscapeMeshes = [];
+      logger.info('FluxArena: Portal escape expired');
+    }
+
     // Track player position for stats
     const playerDist = distanceXZ(this._playerMesh.position, Vector3.Zero());
     this._score.positionSamples.push(playerDist / this._arenaRadius);
@@ -676,13 +741,20 @@ export class FluxArenaGame {
   private _checkFallOff(who: 'player' | 'ai', ruleReversal: boolean): void {
     const mesh = who === 'player' ? this._playerMesh : this._aiMesh;
     const dist = distanceXZ(mesh.position, Vector3.Zero());
+    const portalEscape = this._hasEffect('PORTAL_ESCAPE');
 
     if (dist > this._arenaRadius + 1) {
       this._screenShake.trigger(0.2, 300);
       if (who === 'player') {
-        if (ruleReversal) {
+        if (portalEscape) {
+          this._score.player += 1;
+          this._showFluxText('PORTAL ESCAPE — +1 PT!', COLORS.NEXARI_CYAN);
+        } else if (ruleReversal) {
           this._score.player += 1;
           this._showFluxText('RULE REVERSAL — YOU SCORED!', COLORS.SUCCESS);
+        } else if (this._shieldActive) {
+          this._shieldActive = false;
+          this._showFluxText('SHIELD ABSORBED THE FALL!', COLORS.SUCCESS);
         } else {
           this._score.ai += GAME_CONFIG.SCORING.KNOCKOFF;
           this._score.selfKOs++;
@@ -697,6 +769,17 @@ export class FluxArenaGame {
           this._score.player += GAME_CONFIG.SCORING.KNOCKOFF;
           this._score.knockoffs++;
           this._showFluxText('KNOCKOFF! +2', COLORS.SUCCESS);
+
+          // Combo knock tracking
+          const now = performance.now();
+          this._recentKnockoffTimes.push(now);
+          this._recentKnockoffTimes = this._recentKnockoffTimes.filter((t) => now - t < 10000);
+          if (this._hasEffect('COMBO_KNOCK') && this._recentKnockoffTimes.length >= 2) {
+            this._score.player += 3;
+            this._recentKnockoffTimes = [];
+            this._showFluxText('COMBO KNOCK! +3 BONUS!', COLORS.NEXARI_GOLD);
+            logger.info('FluxArena: Combo knock bonus awarded');
+          }
         }
         this._aiMesh.position = new Vector3(3, 1, 0);
         this._aiVelocity = Vector3.Zero();
@@ -732,6 +815,18 @@ export class FluxArenaGame {
       this._rebuildPlatformEdges();
     }
 
+    if (event.type === 'SHIELD_ORB') {
+      this._spawnShieldOrb();
+    }
+
+    if (event.type === 'NEXARI_SUMMON') {
+      this._spawnSummon();
+    }
+
+    if (event.type === 'PORTAL_ESCAPE') {
+      this._spawnPortals();
+    }
+
     if (event.durationMs > 0) {
       this._activeEffects.push({
         type: event.type,
@@ -741,6 +836,63 @@ export class FluxArenaGame {
 
     // Update active rules display
     this._updateRulesDisplay();
+  }
+
+  private _spawnShieldOrb(): void {
+    if (this._shieldOrbMesh && !this._shieldOrbMesh.isDisposed()) {
+      this._shieldOrbMesh.dispose();
+    }
+    const angle = Math.random() * Math.PI * 2;
+    const r = this._arenaRadius * 0.5 * Math.random();
+    this._shieldOrbMesh = MeshBuilder.CreateSphere('shieldOrb', { diameter: 1.2 }, this._scene);
+    this._shieldOrbMesh.position = new Vector3(Math.cos(angle) * r, 1.5, Math.sin(angle) * r);
+    const mat = new StandardMaterial('shieldOrbMat', this._scene);
+    const cyan = hexToRgb(COLORS.NEXARI_CYAN);
+    mat.diffuseColor = new Color3(cyan.r, cyan.g, cyan.b);
+    mat.emissiveColor = new Color3(cyan.r * 0.8, cyan.g * 0.8, cyan.b * 0.8);
+    mat.alpha = 0.8;
+    this._shieldOrbMesh.material = mat;
+    logger.info('FluxArena: Shield orb spawned');
+  }
+
+  private _spawnSummon(): void {
+    if (this._summonMesh && !this._summonMesh.isDisposed()) {
+      this._summonMesh.dispose();
+    }
+    this._summonMesh = MeshBuilder.CreateIcoSphere('summon', { radius: 0.6, subdivisions: 2 }, this._scene);
+    this._summonMesh.position = new Vector3(0, 1, 4);
+    this._summonVelocity = Vector3.Zero();
+    const mat = new StandardMaterial('summonMat', this._scene);
+    const mg = hexToRgb(COLORS.AI_MAGENTA);
+    mat.diffuseColor = new Color3(mg.r, mg.g, mg.b);
+    mat.emissiveColor = new Color3(mg.r * 0.6, mg.g * 0.6, mg.b * 0.6);
+    this._summonMesh.material = mat;
+    logger.info('FluxArena: Nexari summon spawned');
+  }
+
+  private _spawnPortals(): void {
+    for (const m of this._portalEscapeMeshes) {
+      m.dispose();
+    }
+    this._portalEscapeMeshes = [];
+    const positions = [
+      new Vector3(this._arenaRadius, 0.5, 0),
+      new Vector3(-this._arenaRadius, 0.5, 0),
+      new Vector3(0, 0.5, this._arenaRadius),
+      new Vector3(0, 0.5, -this._arenaRadius),
+    ];
+    const cyan = hexToRgb(COLORS.NEXARI_CYAN);
+    for (let i = 0; i < positions.length; i++) {
+      const torus = MeshBuilder.CreateTorus(`portal_${i}`, { diameter: 3, thickness: 0.3, tessellation: 24 }, this._scene);
+      torus.position = positions[i];
+      const mat = new StandardMaterial(`portalMat_${i}`, this._scene);
+      mat.emissiveColor = new Color3(cyan.r, cyan.g, cyan.b);
+      mat.disableLighting = true;
+      mat.alpha = 0.7;
+      torus.material = mat;
+      this._portalEscapeMeshes.push(torus);
+    }
+    logger.info('FluxArena: Portal escape meshes spawned');
   }
 
   private _rebuildPlatformEdges(): void {
@@ -821,6 +973,12 @@ export class FluxArenaGame {
 
   public dispose(): void {
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._shieldOrbMesh && !this._shieldOrbMesh.isDisposed()) this._shieldOrbMesh.dispose();
+    if (this._summonMesh && !this._summonMesh.isDisposed()) this._summonMesh.dispose();
+    for (const m of this._portalEscapeMeshes) {
+      if (!m.isDisposed()) m.dispose();
+    }
+    this._portalEscapeMeshes = [];
     this._guiTexture.dispose();
     this._scene.dispose();
   }
