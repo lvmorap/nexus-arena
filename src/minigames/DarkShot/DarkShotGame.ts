@@ -611,6 +611,15 @@ export class DarkShotGame {
     for (const orb of this._orbs) {
       if (!orb.isActive) continue;
       orb.velocity.scaleInPlace(damping);
+
+      const toCenter = Vector3.Zero().subtract(orb.mesh.position);
+      toCenter.y = 0;
+      const centerDist = toCenter.length();
+      if (centerDist > 1) {
+        toCenter.normalize();
+        orb.velocity.addInPlace(toCenter.scale(this._cfg.ORBITAL_DRIFT_FORCE * dt));
+      }
+
       orb.mesh.position.addInPlace(orb.velocity.scale(dt));
 
       // Keep at table surface height

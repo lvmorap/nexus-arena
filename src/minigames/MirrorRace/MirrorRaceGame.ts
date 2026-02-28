@@ -60,10 +60,10 @@ export class MirrorRaceGame {
   private _matchStartTime = 0;
   private _playerZ = 0;
   private _playerX = 0;
-  private _playerSpeed = 12;
+  private _playerSpeed = 15;
   private _ghostZ = 0;
   private _ghostX = 0;
-  private _ghostSpeed = 11.5;
+  private _ghostSpeed = 14;
   private _ghostBehavior: GhostBehavior;
   private _obstacles: Obstacle[] = [];
   private _trackLength = 500;
@@ -483,7 +483,7 @@ export class MirrorRaceGame {
     input: { moveLeft: boolean; moveRight: boolean },
     dt: number
   ): void {
-    const laneSpeed = 8;
+    const laneSpeed = 12;
     if (input.moveLeft) {
       this._playerX -= laneSpeed * dt;
     }
@@ -518,7 +518,7 @@ export class MirrorRaceGame {
     for (const obs of this._obstacles) {
       if (obs.passed) continue;
       const dz = Math.abs(this._ghostZ - obs.position.z);
-      if (dz < 8 && dz > 2) {
+      if (dz < 12 && dz > 2) {
         // Approaching obstacle - dodge
         const dx = Math.abs(this._ghostX - obs.position.x);
         if (dx < 2 && obs.type !== 'flux_portal') {
@@ -526,7 +526,7 @@ export class MirrorRaceGame {
             this._ghostBehavior,
             obs.position
           );
-          this._ghostX += dodgeDir * ghostLaneSpeed * dt * 0.8;
+          this._ghostX += dodgeDir * ghostLaneSpeed * dt * 1.2;
           this._ghostX = clamp(this._ghostX, -4, 4);
         }
       }
@@ -566,9 +566,8 @@ export class MirrorRaceGame {
 
       // Barrier collision check
       if (dx < 2) {
-        // Hit!
         this._score.crashes++;
-        this._playerSpeed = Math.max(6, this._playerSpeed - 1);
+        this._slowdownTimer = 1.5;
         this._showAnnouncement('CRASH!', COLORS.DANGER);
 
         // Ithalokk on crashes

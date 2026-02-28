@@ -474,8 +474,10 @@ export class FluxArenaGame {
 
     // AI movement
     const aiSpeed = GAME_CONFIG.FLUX_ARENA.PLAYER_SPEED * 0.85 * (speedBoost ? 1.4 : 1);
-    this._aiVelocity.x += aiDecision.moveDirection.x * aiSpeed * dt;
-    this._aiVelocity.z += aiDecision.moveDirection.z * aiSpeed * dt;
+    const targetAiVelX = aiDecision.moveDirection.x * aiSpeed;
+    const targetAiVelZ = aiDecision.moveDirection.z * aiSpeed;
+    this._aiVelocity.x = this._aiVelocity.x + (targetAiVelX - this._aiVelocity.x) * Math.min(1, 6 * dt);
+    this._aiVelocity.z = this._aiVelocity.z + (targetAiVelZ - this._aiVelocity.z) * Math.min(1, 6 * dt);
 
     // AI push
     if (aiDecision.shouldPush && now - this._lastAiPushTime > GAME_CONFIG.FLUX_ARENA.PUSH_COOLDOWN_MS * 1.2) {
@@ -491,10 +493,17 @@ export class FluxArenaGame {
     this._playerMesh.position.addInPlace(this._playerVelocity.scale(dt));
     this._aiMesh.position.addInPlace(this._aiVelocity.scale(dt));
 
-    // Keep Y position stable (unless zero-G)
-    if (!zeroG) {
-      this._playerMesh.position.y = 1;
-      this._aiMesh.position.y = 1;
+    const gravityFlip = this._hasEffect('GRAVITY_FLIP');
+    if (gravityFlip) {
+      this._playerMesh.position.y += 2 * dt;
+      this._aiMesh.position.y += 2 * dt;
+      this._playerMesh.position.y = Math.min(this._playerMesh.position.y, 6);
+      this._aiMesh.position.y = Math.min(this._aiMesh.position.y, 6);
+    } else if (!zeroG) {
+      this._playerMesh.position.y = 1 + Math.max(0, (this._playerMesh.position.y - 1) * 0.9);
+      this._aiMesh.position.y = 1 + Math.max(0, (this._aiMesh.position.y - 1) * 0.9);
+      if (Math.abs(this._playerMesh.position.y - 1) < 0.05) this._playerMesh.position.y = 1;
+      if (Math.abs(this._aiMesh.position.y - 1) < 0.05) this._aiMesh.position.y = 1;
     } else {
       this._playerMesh.position.y += (Math.sin(now * 0.003) * 0.01);
       this._aiMesh.position.y += (Math.cos(now * 0.003) * 0.01);
@@ -502,9 +511,12 @@ export class FluxArenaGame {
 
     // Earthquake effect
     if (this._hasEffect('EARTHQUAKE')) {
-      const shake = Math.sin(now * 0.05) * 0.15;
-      this._playerVelocity.x += shake;
-      this._aiVelocity.x += shake * 0.5;
+      const shake = Math.sin(now * 0.05) * 0.4;
+      const shake2 = Math.cos(now * 0.07) * 0.3;
+      this._playerVelocity.x += shake * dt * 60;
+      this._playerVelocity.z += shake2 * dt * 60;
+      this._aiVelocity.x += shake * 0.7 * dt * 60;
+      this._aiVelocity.z += shake2 * 0.7 * dt * 60;
     }
 
     // Track player position for stats
@@ -540,8 +552,10 @@ export class FluxArenaGame {
 
     if (dir.length() > 0) {
       dir.normalize();
-      this._playerVelocity.x += dir.x * speed * dt;
-      this._playerVelocity.z += dir.z * speed * dt;
+      const targetVelX = dir.x * speed;
+      const targetVelZ = dir.z * speed;
+      this._playerVelocity.x = this._playerVelocity.x + (targetVelX - this._playerVelocity.x) * Math.min(1, 8 * dt);
+      this._playerVelocity.z = this._playerVelocity.z + (targetVelZ - this._playerVelocity.z) * Math.min(1, 8 * dt);
     }
   }
 
