@@ -10,10 +10,12 @@ import {
   ArcRotateCamera,
   Mesh,
   GlowLayer,
+  DefaultRenderingPipeline,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
 import { InputManager, InputState } from '../../core/InputManager';
+import { ScreenShake } from '../../utils/ScreenShake';
 import { NexariAdaptiveAI } from '../../ai/NexariAdaptiveAI';
 import { RuleMutator, FluxEventType } from './RuleMutator';
 import { RuleMutation } from '../../ai/FluxEngine';
@@ -21,6 +23,7 @@ import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, distanceXZ } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
+import { accessibility } from '../../utils/AccessibilityManager';
 
 export interface FluxArenaScore {
   player: number;
@@ -87,10 +90,16 @@ export class FluxArenaGame {
 
   // Inherited mutations from previous rounds
   private _initialMutations: RuleMutation[] = [];
+  private _screenShake = new ScreenShake();
   private _pushPowerModifier = 1.0;
   private _playerInvisibilityCharges = 0;
   private _hasCenterWeakness = false;
   private _fluxEventInterval: number = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
+
+  // Rule overlay
+  private _ruleOverlay: TextBlock | null = null;
+  private _ruleOverlayVisible = false;
+  private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
@@ -180,6 +189,18 @@ export class FluxArenaGame {
     // Glow layer
     const glow = new GlowLayer('glow', this._scene);
     glow.intensity = 0.6;
+
+    // Post-processing pipeline
+    const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, this._scene, [this._camera]);
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.6;
+    pipeline.bloomWeight = 0.4;
+    pipeline.bloomKernel = 64;
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.vignetteEnabled = true;
+    pipeline.imageProcessing.vignetteWeight = 2.0;
+    pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
     // Octagonal platform
     const platformShape: Vector3[] = [];
@@ -357,6 +378,26 @@ export class FluxArenaGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    this._ruleOverlay = new TextBlock('ruleOverlay');
+    this._ruleOverlay.text = 'FLUX ARENA RULES:\n• Push opponents off the platform (+2 pts)\n• Stay on the platform to survive\n• Flux Events change rules every 20s\n• Self-KO costs -1 point\n\nPress ? to close';
+    this._ruleOverlay.color = COLORS.NEXARI_CYAN;
+    this._ruleOverlay.fontSize = 18;
+    this._ruleOverlay.fontFamily = 'Rajdhani, sans-serif';
+    this._ruleOverlay.textWrapping = true;
+    this._ruleOverlay.lineSpacing = '8px';
+    this._ruleOverlay.isVisible = false;
+    this._guiTexture.addControl(this._ruleOverlay);
+
+    this._ruleKeyHandler = (e: KeyboardEvent): void => {
+      if (e.key === '?') {
+        this._ruleOverlayVisible = !this._ruleOverlayVisible;
+        if (this._ruleOverlay) {
+          this._ruleOverlay.isVisible = this._ruleOverlayVisible;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._ruleKeyHandler);
   }
 
   private _startCountdown(): void {
@@ -474,8 +515,10 @@ export class FluxArenaGame {
 
     // AI movement
     const aiSpeed = GAME_CONFIG.FLUX_ARENA.PLAYER_SPEED * 0.85 * (speedBoost ? 1.4 : 1);
-    this._aiVelocity.x += aiDecision.moveDirection.x * aiSpeed * dt;
-    this._aiVelocity.z += aiDecision.moveDirection.z * aiSpeed * dt;
+    const targetAiVelX = aiDecision.moveDirection.x * aiSpeed;
+    const targetAiVelZ = aiDecision.moveDirection.z * aiSpeed;
+    this._aiVelocity.x = this._aiVelocity.x + (targetAiVelX - this._aiVelocity.x) * Math.min(1, 6 * dt);
+    this._aiVelocity.z = this._aiVelocity.z + (targetAiVelZ - this._aiVelocity.z) * Math.min(1, 6 * dt);
 
     // AI push
     if (aiDecision.shouldPush && now - this._lastAiPushTime > GAME_CONFIG.FLUX_ARENA.PUSH_COOLDOWN_MS * 1.2) {
@@ -491,10 +534,17 @@ export class FluxArenaGame {
     this._playerMesh.position.addInPlace(this._playerVelocity.scale(dt));
     this._aiMesh.position.addInPlace(this._aiVelocity.scale(dt));
 
-    // Keep Y position stable (unless zero-G)
-    if (!zeroG) {
-      this._playerMesh.position.y = 1;
-      this._aiMesh.position.y = 1;
+    const gravityFlip = this._hasEffect('GRAVITY_FLIP');
+    if (gravityFlip) {
+      this._playerMesh.position.y += 2 * dt;
+      this._aiMesh.position.y += 2 * dt;
+      this._playerMesh.position.y = Math.min(this._playerMesh.position.y, 6);
+      this._aiMesh.position.y = Math.min(this._aiMesh.position.y, 6);
+    } else if (!zeroG) {
+      this._playerMesh.position.y = 1 + Math.max(0, (this._playerMesh.position.y - 1) * 0.9);
+      this._aiMesh.position.y = 1 + Math.max(0, (this._aiMesh.position.y - 1) * 0.9);
+      if (Math.abs(this._playerMesh.position.y - 1) < 0.05) this._playerMesh.position.y = 1;
+      if (Math.abs(this._aiMesh.position.y - 1) < 0.05) this._aiMesh.position.y = 1;
     } else {
       this._playerMesh.position.y += (Math.sin(now * 0.003) * 0.01);
       this._aiMesh.position.y += (Math.cos(now * 0.003) * 0.01);
@@ -502,9 +552,12 @@ export class FluxArenaGame {
 
     // Earthquake effect
     if (this._hasEffect('EARTHQUAKE')) {
-      const shake = Math.sin(now * 0.05) * 0.15;
-      this._playerVelocity.x += shake;
-      this._aiVelocity.x += shake * 0.5;
+      const shake = Math.sin(now * 0.05) * 0.4;
+      const shake2 = Math.cos(now * 0.07) * 0.3;
+      this._playerVelocity.x += shake * dt * 60;
+      this._playerVelocity.z += shake2 * dt * 60;
+      this._aiVelocity.x += shake * 0.7 * dt * 60;
+      this._aiVelocity.z += shake2 * 0.7 * dt * 60;
     }
 
     // Track player position for stats
@@ -514,6 +567,13 @@ export class FluxArenaGame {
     // Fall detection
     this._checkFallOff('player', ruleReversal);
     this._checkFallOff('ai', ruleReversal);
+
+    if (!accessibility.isReducedMotion) {
+      const shakeOffset = this._screenShake.update(dt * 1000);
+      if (shakeOffset.length() > 0) {
+        this._camera.position.addInPlace(shakeOffset);
+      }
+    }
 
     // Update UI
     this._updateUI();
@@ -540,8 +600,10 @@ export class FluxArenaGame {
 
     if (dir.length() > 0) {
       dir.normalize();
-      this._playerVelocity.x += dir.x * speed * dt;
-      this._playerVelocity.z += dir.z * speed * dt;
+      const targetVelX = dir.x * speed;
+      const targetVelZ = dir.z * speed;
+      this._playerVelocity.x = this._playerVelocity.x + (targetVelX - this._playerVelocity.x) * Math.min(1, 8 * dt);
+      this._playerVelocity.z = this._playerVelocity.z + (targetVelZ - this._playerVelocity.z) * Math.min(1, 8 * dt);
     }
   }
 
@@ -562,6 +624,7 @@ export class FluxArenaGame {
     }
 
     this._aiVelocity.addInPlace(direction.scale(power));
+    this._screenShake.trigger(0.1, 150);
 
     // Small self knockback
     this._playerVelocity.addInPlace(direction.scale(-power * 0.15));
@@ -615,6 +678,7 @@ export class FluxArenaGame {
     const dist = distanceXZ(mesh.position, Vector3.Zero());
 
     if (dist > this._arenaRadius + 1) {
+      this._screenShake.trigger(0.2, 300);
       if (who === 'player') {
         if (ruleReversal) {
           this._score.player += 1;
@@ -644,6 +708,7 @@ export class FluxArenaGame {
     const event = this._ruleMutator.getNextEvent();
     logger.info(`Flux Event: ${event.displayName}`);
     this._ai.onFluxEvent();
+    this._screenShake.trigger(0.4, 500);
 
     // Show announcement
     this._showFluxText(`⚡ ${event.displayName} ⚡\n${event.description}`, COLORS.NEXARI_PURPLE);
@@ -755,6 +820,7 @@ export class FluxArenaGame {
   }
 
   public dispose(): void {
+    if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }

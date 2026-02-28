@@ -10,16 +10,19 @@ import {
   FreeCamera,
   Mesh,
   GlowLayer,
+  DefaultRenderingPipeline,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
 import { InputManager } from '../../core/InputManager';
+import { ScreenShake } from '../../utils/ScreenShake';
 import { GhostRecorder, GhostBehavior } from './GhostRecorder';
 import { TrackGenerator, Obstacle } from './TrackGenerator';
 import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
 import { hexToRgb, clamp } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
+import { accessibility } from '../../utils/AccessibilityManager';
 
 export interface MirrorRaceScore {
   player: number;
@@ -56,14 +59,15 @@ export class MirrorRaceGame {
     ghostFinished: false,
   };
 
+  private _screenShake = new ScreenShake();
   private _isRunning = false;
   private _matchStartTime = 0;
   private _playerZ = 0;
   private _playerX = 0;
-  private _playerSpeed = 12;
+  private _playerSpeed = 15;
   private _ghostZ = 0;
   private _ghostX = 0;
-  private _ghostSpeed = 11.5;
+  private _ghostSpeed = 14;
   private _ghostBehavior: GhostBehavior;
   private _obstacles: Obstacle[] = [];
   private _trackLength = 500;
@@ -86,6 +90,11 @@ export class MirrorRaceGame {
   // Timers for cleanup
   private _activeIntervals: ReturnType<typeof setInterval>[] = [];
   private _activeTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+  // Rule overlay
+  private _ruleOverlay: TextBlock | null = null;
+  private _ruleOverlayVisible = false;
+  private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   private _onComplete: ((score: MirrorRaceScore) => void) | null = null;
 
@@ -167,6 +176,18 @@ export class MirrorRaceGame {
     // Glow layer
     const glow = new GlowLayer('glow', this._scene);
     glow.intensity = 0.8;
+
+    // Post-processing pipeline
+    const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, this._scene, [this._camera]);
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.5;
+    pipeline.bloomWeight = 0.5;
+    pipeline.bloomKernel = 64;
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.vignetteEnabled = true;
+    pipeline.imageProcessing.vignetteWeight = 3.0;
+    pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
     // Neon tunnel walls
     const tunnelLeft = this._createTunnelWall('left', -5);
@@ -391,6 +412,26 @@ export class MirrorRaceGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    this._ruleOverlay = new TextBlock('ruleOverlay');
+    this._ruleOverlay.text = 'MIRROR RACE RULES:\n• Race against your own ghost\n• A/D or ←/→ to steer\n• Dodge barriers to avoid crashes\n• Break your pattern for bonus points (+1)\n• Flux portals warp you forward (+1)\n• Clean run bonus: +2\n\nPress ? to close';
+    this._ruleOverlay.color = COLORS.NEXARI_CYAN;
+    this._ruleOverlay.fontSize = 18;
+    this._ruleOverlay.fontFamily = 'Rajdhani, sans-serif';
+    this._ruleOverlay.textWrapping = true;
+    this._ruleOverlay.lineSpacing = '8px';
+    this._ruleOverlay.isVisible = false;
+    this._guiTexture.addControl(this._ruleOverlay);
+
+    this._ruleKeyHandler = (e: KeyboardEvent): void => {
+      if (e.key === '?') {
+        this._ruleOverlayVisible = !this._ruleOverlayVisible;
+        if (this._ruleOverlay) {
+          this._ruleOverlay.isVisible = this._ruleOverlayVisible;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._ruleKeyHandler);
   }
 
   private _startCountdown(): void {
@@ -475,6 +516,13 @@ export class MirrorRaceGame {
     // Check finish
     this._checkFinish(elapsed);
 
+    if (!accessibility.isReducedMotion) {
+      const shakeOffset = this._screenShake.update(dt * 1000);
+      if (shakeOffset.length() > 0) {
+        this._camera.position.addInPlace(shakeOffset);
+      }
+    }
+
     // Update UI
     this._updateUI(elapsed);
   }
@@ -483,7 +531,7 @@ export class MirrorRaceGame {
     input: { moveLeft: boolean; moveRight: boolean },
     dt: number
   ): void {
-    const laneSpeed = 8;
+    const laneSpeed = 12;
     if (input.moveLeft) {
       this._playerX -= laneSpeed * dt;
     }
@@ -518,7 +566,7 @@ export class MirrorRaceGame {
     for (const obs of this._obstacles) {
       if (obs.passed) continue;
       const dz = Math.abs(this._ghostZ - obs.position.z);
-      if (dz < 8 && dz > 2) {
+      if (dz < 12 && dz > 2) {
         // Approaching obstacle - dodge
         const dx = Math.abs(this._ghostX - obs.position.x);
         if (dx < 2 && obs.type !== 'flux_portal') {
@@ -526,7 +574,7 @@ export class MirrorRaceGame {
             this._ghostBehavior,
             obs.position
           );
-          this._ghostX += dodgeDir * ghostLaneSpeed * dt * 0.8;
+          this._ghostX += dodgeDir * ghostLaneSpeed * dt * 1.2;
           this._ghostX = clamp(this._ghostX, -4, 4);
         }
       }
@@ -552,6 +600,7 @@ export class MirrorRaceGame {
           this._playerZ -= 10;
           this._score.player += 1;
           this._showAnnouncement('FLUX WARP! +1', COLORS.NEXARI_CYAN);
+          this._screenShake.trigger(0.2, 200);
         }
         continue;
       }
@@ -566,10 +615,10 @@ export class MirrorRaceGame {
 
       // Barrier collision check
       if (dx < 2) {
-        // Hit!
         this._score.crashes++;
-        this._playerSpeed = Math.max(6, this._playerSpeed - 1);
+        this._slowdownTimer = 1.5;
         this._showAnnouncement('CRASH!', COLORS.DANGER);
+        this._screenShake.trigger(0.3, 300);
 
         // Ithalokk on crashes
         if (this._score.crashes === 1) {
@@ -719,6 +768,7 @@ export class MirrorRaceGame {
       clearTimeout(timeout);
     }
     this._activeTimeouts = [];
+    if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }
