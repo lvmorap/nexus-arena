@@ -1,5 +1,4 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { PHYSICS } from '../../constants/Physics';
 
 export interface BallState {
   position: Vector3;
