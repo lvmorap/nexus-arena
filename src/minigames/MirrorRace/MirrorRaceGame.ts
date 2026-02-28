@@ -16,6 +16,7 @@ import { Engine } from '../../core/Engine';
 import { InputManager } from '../../core/InputManager';
 import { GhostRecorder, GhostBehavior } from './GhostRecorder';
 import { TrackGenerator, Obstacle } from './TrackGenerator';
+import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
 import { hexToRgb, clamp } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
@@ -87,7 +88,13 @@ export class MirrorRaceGame {
 
   private _onComplete: ((score: MirrorRaceScore) => void) | null = null;
 
-  constructor(engine: Engine, input: InputManager, ghostRecorder: GhostRecorder, playerLaneBias = 0) {
+  constructor(
+    engine: Engine,
+    input: InputManager,
+    ghostRecorder: GhostRecorder,
+    playerLaneBias = 0,
+    mutations: RuleMutation[] = []
+  ) {
     this._engine = engine;
     this._input = input;
     this._ghostRecorder = ghostRecorder;
@@ -96,6 +103,32 @@ export class MirrorRaceGame {
     this._trackGenerator = new TrackGenerator(this._trackLength, playerLaneBias);
     this._scene = new Scene(this._engine.babylonEngine);
     this._scene.clearColor = new Color4(0.02, 0.005, 0.04, 1);
+
+    // Apply mutations from previous rounds
+    this._applyMutations(mutations);
+  }
+
+  private _applyMutations(mutations: RuleMutation[]): void {
+    for (const mut of mutations) {
+      switch (mut.effect) {
+        case 'ARENA_SHRINK_INITIAL':
+          // More obstacles in the track
+          this._trackLength = 550;
+          this._trackGenerator = new TrackGenerator(this._trackLength, this._playerHistoricalBias);
+          logger.info('MirrorRace: Track extended due to reckless patterns');
+          break;
+        case 'CENTER_WEAKNESS':
+          // Ghost is more predictable (stabilized mirror)
+          this._ghostBehavior.speedVariance *= 0.5;
+          logger.info('MirrorRace: Ghost stabilized due to center bias');
+          break;
+        case 'PUSH_NERF':
+          // Ghost is slightly faster
+          this._ghostSpeed += 0.5;
+          logger.info('MirrorRace: Ghost faster due to dominance counter');
+          break;
+      }
+    }
   }
 
   public get scene(): Scene {

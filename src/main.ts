@@ -125,8 +125,11 @@ class NexusArena {
   private _startFluxArena(): void {
     this._disposeCurrentScenes();
 
+    // Get mutations computed from DarkShot performance
+    const mutations = this._fluxEngine.computeMutations();
+
     this._stateMachine.transitionTo('FLUX_ARENA');
-    this._fluxArenaGame = new FluxArenaGame(this._engine, this._input);
+    this._fluxArenaGame = new FluxArenaGame(this._engine, this._input, mutations);
     this._fluxArenaGame.setup((score: FluxArenaScore) => {
       this._onFluxArenaComplete(score);
     });
@@ -168,12 +171,16 @@ class NexusArena {
   private _startMirrorRace(): void {
     this._disposeCurrentScenes();
 
+    // Get mutations computed from DarkShot + FluxArena performance
+    const mutations = this._fluxEngine.computeMutations();
+
     this._stateMachine.transitionTo('MIRROR_RACE');
     this._mirrorRaceGame = new MirrorRaceGame(
       this._engine,
       this._input,
       this._ghostRecorder,
-      this._playerLaneBias
+      this._playerLaneBias,
+      mutations
     );
     this._mirrorRaceGame.setup((score: MirrorRaceScore) => {
       this._onMirrorRaceComplete(score);
