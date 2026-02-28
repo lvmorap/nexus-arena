@@ -11,6 +11,7 @@ import {
   Mesh,
   GlowLayer,
   DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
@@ -122,6 +123,11 @@ export class FluxArenaGame {
   private _nexariBlowReady = false;
   private _gravumoText!: TextBlock;
 
+  // Pipeline effects
+  private _pipeline: DefaultRenderingPipeline | null = null;
+  private _chromaticFrames = 0;
+  private _dofKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
   constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
     this._input = input;
@@ -222,6 +228,23 @@ export class FluxArenaGame {
     pipeline.imageProcessing.vignetteEnabled = true;
     pipeline.imageProcessing.vignetteWeight = 2.0;
     pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
+
+    // Depth of Field (toggle with Q)
+    pipeline.depthOfFieldEnabled = false;
+    pipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
+    pipeline.depthOfField.focalLength = 150;
+    pipeline.depthOfField.fStop = 2.8;
+    pipeline.depthOfField.focusDistance = 2000;
+
+    // Chromatic aberration (triggered on collisions)
+    pipeline.chromaticAberrationEnabled = false;
+    pipeline.chromaticAberration.aberrationAmount = 100;
+
+    this._pipeline = pipeline;
+    this._dofKeyHandler = (e: KeyboardEvent): void => {
+      if (e.code === 'KeyQ') pipeline.depthOfFieldEnabled = !pipeline.depthOfFieldEnabled;
+    };
+    window.addEventListener('keydown', this._dofKeyHandler);
 
     // Octagonal platform
     const platformShape: Vector3[] = [];
@@ -508,6 +531,14 @@ export class FluxArenaGame {
     if (this._countdownActive || !this._isRunning) return;
     if (this._engine.isPaused) return;
 
+    // Chromatic aberration frame countdown
+    if (this._chromaticFrames > 0) {
+      this._chromaticFrames--;
+      if (this._chromaticFrames <= 0 && this._pipeline) {
+        this._pipeline.chromaticAberrationEnabled = false;
+      }
+    }
+
     const now = performance.now();
     this._matchTimeRemaining = GAME_CONFIG.FLUX_ARENA.MATCH_DURATION_MS - (now - this._matchStartTime);
 
@@ -723,6 +754,7 @@ export class FluxArenaGame {
 
     this._aiVelocity.addInPlace(direction.scale(power));
     this._screenShake.trigger(0.1, 150);
+    this._triggerChromaticAberration();
 
     // Small self knockback
     this._playerVelocity.addInPlace(direction.scale(-power * 0.15));
@@ -796,8 +828,16 @@ export class FluxArenaGame {
     const power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * 0.8 * (1 - dist / 8);
     this._playerVelocity.addInPlace(direction.scale(power));
     this._aiVelocity.addInPlace(direction.scale(-power * 0.15));
+    this._triggerChromaticAberration();
 
     this._flashMesh(this._aiMesh, COLORS.DANGER);
+  }
+
+  private _triggerChromaticAberration(): void {
+    if (this._pipeline) {
+      this._pipeline.chromaticAberrationEnabled = true;
+      this._chromaticFrames = 3;
+    }
   }
 
   private _flashMesh(mesh: Mesh, color: string): void {
@@ -1053,6 +1093,7 @@ export class FluxArenaGame {
 
   public dispose(): void {
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._dofKeyHandler) window.removeEventListener('keydown', this._dofKeyHandler);
     if (this._shieldOrbMesh && !this._shieldOrbMesh.isDisposed()) this._shieldOrbMesh.dispose();
     if (this._summonMesh && !this._summonMesh.isDisposed()) this._summonMesh.dispose();
     if (this._xebHologram) {

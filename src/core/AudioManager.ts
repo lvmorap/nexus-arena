@@ -1,5 +1,6 @@
 import { logger } from '../utils/Logger';
 import { AUDIO_KEYS } from '../constants/Audio';
+import { clamp } from '../utils/MathUtils';
 
 type OscType = OscillatorType;
 
@@ -20,6 +21,12 @@ export class AudioManager {
   private _muted = false;
   private _intensity = 0.5;
   private _currentMusic: MusicState | null = null;
+
+  // Adaptive music layers
+  private _calmLayer: MusicState | null = null;
+  private _intenseLayer: MusicState | null = null;
+  private _calmGain: GainNode | null = null;
+  private _intenseGain: GainNode | null = null;
 
   constructor() {
     logger.info('AudioManager initialized');
@@ -299,8 +306,172 @@ export class AudioManager {
     this._currentMusic = null;
   }
 
+  /**
+   * Play adaptive music with calm and intense layers.
+   * Both layers play simultaneously; use crossfade() to mix between them.
+   */
+  public playAdaptiveMusic(key: string): void {
+    try {
+      const ctx = this._ensureContext();
+      if (!ctx || !this._musicGain) return;
+      this._stopMusicImmediate();
+      this._stopAdaptiveLayers();
+
+      const M = AUDIO_KEYS.MUSIC;
+      const dest = this._musicGain;
+
+      // Calm layer gain node
+      this._calmGain = ctx.createGain();
+      this._calmGain.gain.value = 1.0;
+      this._calmGain.connect(dest);
+
+      // Intense layer gain node
+      this._intenseGain = ctx.createGain();
+      this._intenseGain.gain.value = 0.0;
+      this._intenseGain.connect(dest);
+
+      const calmOscs: OscillatorNode[] = [];
+      const calmGains: GainNode[] = [];
+      const intenseOscs: OscillatorNode[] = [];
+      const intenseGains: GainNode[] = [];
+
+      const makeDrone = (
+        target: AudioNode,
+        freq: number,
+        type: OscType,
+        vol: number,
+        oscs: OscillatorNode[],
+        gains: GainNode[],
+      ): void => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain);
+        gain.connect(target);
+        osc.start();
+        oscs.push(osc);
+        gains.push(gain);
+      };
+
+      const makeLfo = (
+        target: AudioParam,
+        rate: number,
+        amount: number,
+        base: number,
+        oscs: OscillatorNode[],
+      ): void => {
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.value = rate;
+        lfoGain.gain.value = amount;
+        lfo.connect(lfoGain);
+        lfoGain.connect(target);
+        target.value = base;
+        lfo.start();
+        oscs.push(lfo);
+      };
+
+      switch (key) {
+        case M.DARK_SHOT_TENSION:
+          // Calm: low drone, slow LFO
+          makeDrone(this._calmGain, 65.41, 'sine', 0.12, calmOscs, calmGains);
+          makeLfo(calmOscs[0].frequency, 0.2, 3, 65.41, calmOscs);
+          // Intense: higher freq, faster LFO, extra oscillator
+          makeDrone(this._intenseGain, 110, 'sine', 0.1, intenseOscs, intenseGains);
+          makeDrone(this._intenseGain, 164.81, 'triangle', 0.06, intenseOscs, intenseGains);
+          makeLfo(intenseGains[0].gain, 1.5, 0.08, 0.1, intenseOscs);
+          break;
+        case M.FLUX_ARENA_HYPE:
+          // Calm: muted square drone
+          makeDrone(this._calmGain, 82.41, 'square', 0.08, calmOscs, calmGains);
+          makeLfo(calmGains[0].gain, 0.5, 0.05, 0.08, calmOscs);
+          // Intense: fast-pumping square + saw
+          makeDrone(this._intenseGain, 110, 'square', 0.1, intenseOscs, intenseGains);
+          makeDrone(this._intenseGain, 220, 'sawtooth', 0.06, intenseOscs, intenseGains);
+          makeLfo(intenseGains[0].gain, 140 / 60, 0.08, 0.1, intenseOscs);
+          break;
+        case M.MIRROR_RACE_PULSE:
+          // Calm: gentle sawtooth
+          makeDrone(this._calmGain, 98.0, 'sawtooth', 0.08, calmOscs, calmGains);
+          makeLfo(calmGains[0].gain, 1.0, 0.04, 0.08, calmOscs);
+          // Intense: fast pulse, higher octave
+          makeDrone(this._intenseGain, 130.81, 'sawtooth', 0.1, intenseOscs, intenseGains);
+          makeDrone(this._intenseGain, 196.0, 'triangle', 0.06, intenseOscs, intenseGains);
+          makeLfo(intenseGains[0].gain, 160 / 60, 0.08, 0.1, intenseOscs);
+          break;
+        default:
+          logger.debug(`AudioManager: no adaptive music for key '${key}'`);
+          return;
+      }
+
+      this._calmLayer = { oscillators: calmOscs, gains: calmGains, key };
+      this._intenseLayer = { oscillators: intenseOscs, gains: intenseGains, key };
+      logger.debug(`AudioManager: adaptive music started for '${key}'`);
+    } catch {
+      // audio must never crash the game
+    }
+  }
+
+  /**
+   * Crossfade between calm and intense adaptive music layers.
+   * @param intensity 0.0 (fully calm) to 1.0 (fully intense)
+   * @param fadeTime Time in seconds for the crossfade
+   */
+  public crossfade(intensity: number, fadeTime = 0.5): void {
+    try {
+      const ctx = this._ctx;
+      if (!ctx || !this._calmGain || !this._intenseGain) return;
+
+      const clamped = clamp(intensity, 0, 1);
+      const now = ctx.currentTime;
+
+      this._calmGain.gain.cancelScheduledValues(now);
+      this._calmGain.gain.setValueAtTime(this._calmGain.gain.value, now);
+      this._calmGain.gain.linearRampToValueAtTime(1 - clamped, now + fadeTime);
+
+      this._intenseGain.gain.cancelScheduledValues(now);
+      this._intenseGain.gain.setValueAtTime(this._intenseGain.gain.value, now);
+      this._intenseGain.gain.linearRampToValueAtTime(clamped, now + fadeTime);
+    } catch {
+      // audio must never crash the game
+    }
+  }
+
+  private _stopAdaptiveLayers(): void {
+    const stopLayer = (layer: MusicState | null): void => {
+      if (!layer || !this._ctx) return;
+      const now = this._ctx.currentTime;
+      for (const g of layer.gains) {
+        try {
+          g.gain.cancelScheduledValues(now);
+          g.gain.setValueAtTime(g.gain.value, now);
+          g.gain.linearRampToValueAtTime(0, now + 0.01);
+        } catch { /* already stopped */ }
+      }
+      for (const o of layer.oscillators) {
+        try { o.stop(); } catch { /* already stopped */ }
+      }
+    };
+    stopLayer(this._calmLayer);
+    stopLayer(this._intenseLayer);
+    this._calmLayer = null;
+    this._intenseLayer = null;
+    if (this._calmGain) {
+      try { this._calmGain.disconnect(); } catch { /* ok */ }
+      this._calmGain = null;
+    }
+    if (this._intenseGain) {
+      try { this._intenseGain.disconnect(); } catch { /* ok */ }
+      this._intenseGain = null;
+    }
+  }
+
   public stopMusic(): void {
     try {
+      this._stopAdaptiveLayers();
       if (!this._currentMusic || !this._ctx) return;
       const now = this._ctx.currentTime;
       const fadeTime = 0.3;
@@ -366,6 +537,7 @@ export class AudioManager {
   public dispose(): void {
     try {
       this._stopMusicImmediate();
+      this._stopAdaptiveLayers();
       if (this._ctx) {
         this._ctx.close().catch(() => {});
         this._ctx = null;

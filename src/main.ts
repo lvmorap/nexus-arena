@@ -22,6 +22,7 @@ import { logger } from './utils/Logger';
 import { accessibility } from './utils/AccessibilityManager';
 import { PauseOverlay } from './ui/PauseOverlay';
 import { SettingsPanel } from './ui/SettingsPanel';
+import { performanceOverlay } from './ui/PerformanceOverlay';
 
 class NexusArena {
   private _engine: Engine;
@@ -339,6 +340,7 @@ class NexusArena {
 
   private _disposeCurrentScenes(): void {
     this._disposePauseOverlay();
+    performanceOverlay.dispose();
     if (this._bootScene) {
       this._bootScene.dispose();
       this._bootScene = null;

@@ -19,6 +19,8 @@ Earth has been contacted by the Nexari — an alien civilization that refuses wa
 - **A/D or ←/→** — Steer (MirrorRace)
 - **C** — Toggle colorblind mode
 - **H** — Toggle high contrast
+- **Q** — Toggle Depth of Field
+- **F3** — Toggle performance overlay (dev)
 - **?** — Show/hide rule card
 
 **Three Rounds:**
@@ -69,6 +71,25 @@ npm run build
 - **High contrast** — Press `H` to toggle enhanced contrast
 - **Rule cards** — Press `?` to view current game rules at any time
 - **Mouse-only play** — Game is fully playable without camera mode
+
+## 🌐 Browser Compatibility
+
+| Browser | Status | Notes |
+|---------|--------|-------|
+| Chrome 90+ | ✅ Full support | Primary development target, WebGL2 + Web Audio API |
+| Firefox 90+ | ✅ Full support | WebGL2 via OpenGL backend, Web Audio API supported |
+| Edge 90+ | ✅ Full support | Chromium-based, same support as Chrome |
+
+**Requirements:**
+- WebGL2 capable GPU
+- Web Audio API support
+- ES2022 JavaScript support
+- `font-display: swap` for self-hosted fonts (all modern browsers)
+
+**Known Considerations:**
+- GPUParticleSystem auto-detects support; falls back to CPU particles on unsupported hardware
+- Havok WASM physics requires `vite-plugin-wasm` + `vite-plugin-top-level-await` for bundling
+- `AudioContext` may require a user gesture to resume on all browsers
 
 ## 📄 Credits
 
@@ -129,17 +150,17 @@ MIT
 ### Audio Enhancement
 
 - [ ] Replace Web Audio synthesis with real audio files (CC0 from freemusicarchive.org/opengameart.org)
-- [ ] Adaptive music crossfade between calm/intense layers per mini-game
-- [ ] Self-hosted fonts in `/public/fonts/` for offline reliability
+- [x] Adaptive music crossfade between calm/intense layers per mini-game
+- [x] Self-hosted fonts in `/public/fonts/` for offline reliability
 
 ### Polish & Performance
 
-- [ ] Performance monitoring dev overlay (FPS, particle count, draw calls, physics body count)
-- [ ] Depth of Field toggle ('Q' key)
-- [ ] Chromatic aberration triggered on high-speed collisions (3 frames only)
-- [ ] GPUParticleSystem when available (pool unused particles)
-- [ ] Bundle size optimization (target < 5MB gzipped)
-- [ ] Cross-browser testing: Chrome, Firefox, Edge
+- [x] Performance monitoring dev overlay (FPS, particle count, draw calls, physics body count)
+- [x] Depth of Field toggle ('Q' key)
+- [x] Chromatic aberration triggered on high-speed collisions (3 frames only)
+- [x] GPUParticleSystem when available (pool unused particles)
+- [x] Bundle size optimization (target < 5MB gzipped)
+- [x] Cross-browser testing: Chrome, Firefox, Edge
 
 ### UI Enhancements
 

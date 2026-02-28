@@ -1,0 +1,39 @@
+/* Self-hosted font declarations for offline reliability */
+/* When font files are available, uncomment and use local sources */
+/* For now, fall back to system fonts with local() declarations */
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Orbitron Regular'), local('Orbitron-Regular');
+  /* Add: url('/nexus-arena/fonts/Orbitron-Regular.woff2') format('woff2'); when file is available */
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Orbitron Bold'), local('Orbitron-Bold');
+  /* Add: url('/nexus-arena/fonts/Orbitron-Bold.woff2') format('woff2'); when file is available */
+}
+
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Rajdhani Regular'), local('Rajdhani-Regular');
+  /* Add: url('/nexus-arena/fonts/Rajdhani-Regular.woff2') format('woff2'); when file is available */
+}
+
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Rajdhani SemiBold'), local('Rajdhani-SemiBold');
+  /* Add: url('/nexus-arena/fonts/Rajdhani-SemiBold.woff2') format('woff2'); when file is available */
+}

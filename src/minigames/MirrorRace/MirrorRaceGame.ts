@@ -11,6 +11,7 @@ import {
   Mesh,
   GlowLayer,
   DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
   Observer,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
@@ -96,6 +97,7 @@ export class MirrorRaceGame {
   private _ruleOverlay: TextBlock | null = null;
   private _ruleOverlayVisible = false;
   private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _dofKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Void Volley
   private _volleyOrbs: { mesh: Mesh; z: number; active: boolean }[] = [];
@@ -203,6 +205,17 @@ export class MirrorRaceGame {
     pipeline.imageProcessing.vignetteEnabled = true;
     pipeline.imageProcessing.vignetteWeight = 3.0;
     pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
+
+    // Depth of Field (toggle with Q)
+    pipeline.depthOfFieldEnabled = false;
+    pipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
+    pipeline.depthOfField.focalLength = 150;
+    pipeline.depthOfField.fStop = 2.8;
+    pipeline.depthOfField.focusDistance = 2000;
+    this._dofKeyHandler = (e: KeyboardEvent): void => {
+      if (e.code === 'KeyQ') pipeline.depthOfFieldEnabled = !pipeline.depthOfFieldEnabled;
+    };
+    window.addEventListener('keydown', this._dofKeyHandler);
 
     // Neon tunnel walls
     const tunnelLeft = this._createTunnelWall('left', -5);
@@ -942,6 +955,7 @@ export class MirrorRaceGame {
       this._dimensionalWindowObserver = null;
     }
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._dofKeyHandler) window.removeEventListener('keydown', this._dofKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }

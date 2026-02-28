@@ -1,5 +1,6 @@
 import { Engine as BabylonEngine, Scene } from '@babylonjs/core';
 import { logger } from '../utils/Logger';
+import { performanceOverlay } from '../ui/PerformanceOverlay';
 
 export class Engine {
   private _engine: BabylonEngine;
@@ -44,6 +45,7 @@ export class Engine {
 
   public setScene(scene: Scene): void {
     this._currentScene = scene;
+    performanceOverlay.attach(scene);
   }
 
   public startRenderLoop(): void {

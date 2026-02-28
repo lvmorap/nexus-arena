@@ -1,5 +1,6 @@
 import { Scene } from '@babylonjs/core/scene';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
+import { GPUParticleSystem } from '@babylonjs/core/Particles/gpuParticleSystem';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { COLORS } from '../constants/Colors';
@@ -12,9 +13,19 @@ function hexToColor4(hex: string, alpha: number): Color4 {
   return new Color4(rgb.r, rgb.g, rgb.b, alpha);
 }
 
+/** Create a particle system, preferring GPU when available. */
+function createSystem(name: string, capacity: number, scene: Scene): ParticleSystem {
+  if (GPUParticleSystem.IsSupported) {
+    // GPUParticleSystem shares the same runtime API surface used by our factory methods.
+    // The cast avoids changing all downstream return types to IParticleSystem.
+    return new GPUParticleSystem(name, { capacity }, scene) as unknown as ParticleSystem;
+  }
+  return new ParticleSystem(name, capacity, scene);
+}
+
 export class ParticleFactory {
   public static createPortalAbsorb(scene: Scene, position: Vector3, color: Color4): ParticleSystem {
-    const ps = new ParticleSystem('portalAbsorb', MAX_PARTICLES, scene);
+    const ps = createSystem('portalAbsorb', MAX_PARTICLES, scene);
     ps.emitter = position;
     ps.createPointEmitter(new Vector3(-1, 0, -1), new Vector3(1, 0, 1));
     ps.color1 = color;
@@ -33,7 +44,7 @@ export class ParticleFactory {
   }
 
   public static createKnockoffExplosion(scene: Scene, position: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('knockoffExplosion', MAX_PARTICLES, scene);
+    const ps = createSystem('knockoffExplosion', MAX_PARTICLES, scene);
     ps.emitter = position;
     ps.createSphereEmitter(1.5);
     ps.color1 = hexToColor4(COLORS.DANGER, 1.0);
@@ -54,7 +65,7 @@ export class ParticleFactory {
   }
 
   public static createFluxEventShockwave(scene: Scene, position: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('fluxShockwave', MAX_PARTICLES, scene);
+    const ps = createSystem('fluxShockwave', MAX_PARTICLES, scene);
     ps.emitter = position;
     ps.createSphereEmitter(3.0);
     ps.color1 = hexToColor4(COLORS.NEXARI_PURPLE, 0.9);
@@ -75,7 +86,7 @@ export class ParticleFactory {
   }
 
   public static createTrailContinuous(scene: Scene, emitter: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('trail', 200, scene);
+    const ps = createSystem('trail', 200, scene);
     ps.emitter = emitter;
     ps.createPointEmitter(new Vector3(0, 0, 0), new Vector3(0, 0, 0));
     ps.color1 = hexToColor4(COLORS.PLAYER_CYAN, 0.8);
@@ -92,7 +103,7 @@ export class ParticleFactory {
   }
 
   public static createBlindBonusBurst(scene: Scene, position: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('blindBurst', MAX_PARTICLES, scene);
+    const ps = createSystem('blindBurst', MAX_PARTICLES, scene);
     ps.emitter = position;
     ps.createSphereEmitter(1.0);
     ps.color1 = hexToColor4(COLORS.NEXARI_GOLD, 1.0);
@@ -113,7 +124,7 @@ export class ParticleFactory {
   }
 
   public static createMirrorGhostParticles(scene: Scene, emitter: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('mirrorGhost', 150, scene);
+    const ps = createSystem('mirrorGhost', 150, scene);
     ps.emitter = emitter;
     ps.createPointEmitter(new Vector3(-0.5, 0, -0.5), new Vector3(0.5, 1, 0.5));
     ps.color1 = hexToColor4(COLORS.AI_MAGENTA, 0.6);
@@ -130,7 +141,7 @@ export class ParticleFactory {
   }
 
   public static createNebulaAmbient(scene: Scene, center: Vector3): ParticleSystem {
-    const ps = new ParticleSystem('nebulaAmbient', 300, scene);
+    const ps = createSystem('nebulaAmbient', 300, scene);
     ps.emitter = center;
     ps.createSphereEmitter(15.0);
     ps.color1 = hexToColor4(COLORS.NEBULA_BLUE, 0.3);

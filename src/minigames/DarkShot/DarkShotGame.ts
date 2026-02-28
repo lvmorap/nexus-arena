@@ -11,6 +11,7 @@ import {
   Mesh,
   GlowLayer,
   DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
@@ -114,6 +115,7 @@ export class DarkShotGame {
   private _ruleOverlay: TextBlock | null = null;
   private _ruleOverlayVisible = false;
   private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _dofKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Config shortcut
   private readonly _cfg = GAME_CONFIG.DARK_SHOT;
@@ -199,6 +201,17 @@ export class DarkShotGame {
     pipeline.imageProcessing.vignetteEnabled = true;
     pipeline.imageProcessing.vignetteWeight = 2.5;
     pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
+
+    // Depth of Field (toggle with Q)
+    pipeline.depthOfFieldEnabled = false;
+    pipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
+    pipeline.depthOfField.focalLength = 150;
+    pipeline.depthOfField.fStop = 2.8;
+    pipeline.depthOfField.focusDistance = 2000;
+    this._dofKeyHandler = (e: KeyboardEvent): void => {
+      if (e.code === 'KeyQ') pipeline.depthOfFieldEnabled = !pipeline.depthOfFieldEnabled;
+    };
+    window.addEventListener('keydown', this._dofKeyHandler);
 
     // Starfield
     for (let i = 0; i < 200; i++) {
@@ -1329,6 +1342,7 @@ export class DarkShotGame {
     if (this._pointerMoveHandler) canvas.removeEventListener('pointermove', this._pointerMoveHandler);
     if (this._pointerUpHandler) canvas.removeEventListener('pointerup', this._pointerUpHandler);
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._dofKeyHandler) window.removeEventListener('keydown', this._dofKeyHandler);
     if (this._mirrorMesh && !this._mirrorMesh.isDisposed()) this._mirrorMesh.dispose();
     if (this._judgmentOrb?.mesh && !this._judgmentOrb.mesh.isDisposed()) this._judgmentOrb.mesh.dispose();
     if (this._centralPortal?.mesh && !this._centralPortal.mesh.isDisposed()) this._centralPortal.mesh.dispose();
