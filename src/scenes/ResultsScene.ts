@@ -139,13 +139,15 @@ export class ResultsScene {
 
     // Stats
     const statsText = new TextBlock('stats');
-    const avgPos = score.positionSamples.length > 0 ? score.positionSamples[0] : 0.5;
-    statsText.text = [
-      `Knockoffs: ${score.knockoffs}`,
-      `Self-KOs: ${score.selfKOs}`,
-      `Flux Events Exploited: ${score.fluxEventsExploited}`,
-      `Avg Position from Center: ${(avgPos * 100).toFixed(0)}%`,
-    ].join('  |  ');
+    const statsLines: string[] = [];
+    if (score.knockoffs > 0 || score.selfKOs > 0) {
+      statsLines.push(`Knockoffs: ${score.knockoffs}  |  Self-KOs: ${score.selfKOs}`);
+    }
+    if (score.fluxEventsExploited > 0) {
+      statsLines.push(`Flux Events Exploited: ${score.fluxEventsExploited}`);
+    }
+    statsLines.push('Three rounds of adaptive competition complete.');
+    statsText.text = statsLines.join('  |  ');
     statsText.color = COLORS.NEUTRAL;
     statsText.fontSize = 14;
     statsText.fontFamily = 'Rajdhani, sans-serif';

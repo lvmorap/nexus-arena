@@ -7,8 +7,12 @@ import { GameStateMachine } from './core/GameStateMachine';
 import { InputManager } from './core/InputManager';
 import { FluxEngine } from './ai/FluxEngine';
 import { MenuScene } from './scenes/MenuScene';
+import { TransitionScene } from './scenes/TransitionScene';
 import { ResultsScene } from './scenes/ResultsScene';
+import { DarkShotGame, DarkShotScore } from './minigames/DarkShot/DarkShotGame';
 import { FluxArenaGame, FluxArenaScore } from './minigames/FluxArena/FluxArenaGame';
+import { MirrorRaceGame, MirrorRaceScore } from './minigames/MirrorRace/MirrorRaceGame';
+import { GhostRecorder } from './minigames/MirrorRace/GhostRecorder';
 import { logger } from './utils/Logger';
 
 class NexusArena {
@@ -16,9 +20,19 @@ class NexusArena {
   private _stateMachine: GameStateMachine;
   private _input: InputManager;
   private _fluxEngine: FluxEngine;
+  private _ghostRecorder: GhostRecorder;
 
+  // Track cumulative scores across mini-games
+  private _totalPlayerScore = 0;
+  private _totalAiScore = 0;
+  private _playerLaneBias = 0;
+
+  // Active scenes (only one at a time)
   private _menuScene: MenuScene | null = null;
+  private _darkShotGame: DarkShotGame | null = null;
+  private _transitionScene: TransitionScene | null = null;
   private _fluxArenaGame: FluxArenaGame | null = null;
+  private _mirrorRaceGame: MirrorRaceGame | null = null;
   private _resultsScene: ResultsScene | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -26,6 +40,7 @@ class NexusArena {
     this._stateMachine = new GameStateMachine();
     this._input = new InputManager(canvas);
     this._fluxEngine = new FluxEngine();
+    this._ghostRecorder = new GhostRecorder();
 
     this._engine.startRenderLoop();
   }
@@ -36,16 +51,76 @@ class NexusArena {
   }
 
   private _showMenu(): void {
-    // Dispose previous scenes
     this._disposeCurrentScenes();
+
+    // Reset cumulative scores for new playthrough
+    this._totalPlayerScore = 0;
+    this._totalAiScore = 0;
+    this._playerLaneBias = 0;
+    this._fluxEngine = new FluxEngine();
+    this._ghostRecorder = new GhostRecorder();
 
     this._stateMachine.transitionTo('MENU');
     this._menuScene = new MenuScene(this._engine);
     this._menuScene.setup(() => {
-      this._startFluxArena();
+      this._startDarkShot();
     });
     this._engine.setScene(this._menuScene.scene);
   }
+
+  /* ---- ROUND 1: DARK SHOT ---- */
+
+  private _startDarkShot(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('DARK_SHOT');
+    this._darkShotGame = new DarkShotGame(this._engine, this._input);
+    this._darkShotGame.setup((score: DarkShotScore) => {
+      this._onDarkShotComplete(score);
+    });
+    this._engine.setScene(this._darkShotGame.scene);
+  }
+
+  private _onDarkShotComplete(score: DarkShotScore): void {
+    this._totalPlayerScore += score.player;
+    this._totalAiScore += score.ai;
+
+    // Feed DarkShot data into FluxEngine
+    this._fluxEngine.updateDarkShotHistory({
+      blindPockets: score.blindPockets,
+      litPockets: score.litPockets,
+      scratches: score.scratches,
+      avgShotPower: score.avgShotPower,
+      totalScore: score.player,
+    });
+
+    // Compute mutations that will affect FluxArena
+    const mutations = this._fluxEngine.computeMutations();
+
+    // Show transition before FluxArena
+    this._showTransition('ROUND 1: DARK SHOT', score.player, score.ai, mutations, () => {
+      this._startFluxArena();
+    });
+  }
+
+  /* ---- TRANSITION ---- */
+
+  private _showTransition(
+    roundLabel: string,
+    playerScore: number,
+    aiScore: number,
+    mutations: ReturnType<FluxEngine['computeMutations']>,
+    onContinue: () => void
+  ): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('TRANSITION');
+    this._transitionScene = new TransitionScene(this._engine);
+    this._transitionScene.setup(roundLabel, playerScore, aiScore, mutations, onContinue);
+    this._engine.setScene(this._transitionScene.scene);
+  }
+
+  /* ---- ROUND 2: FLUX ARENA ---- */
 
   private _startFluxArena(): void {
     this._disposeCurrentScenes();
@@ -59,13 +134,16 @@ class NexusArena {
   }
 
   private _onFluxArenaComplete(score: FluxArenaScore): void {
-    // Update FluxEngine with performance data
+    this._totalPlayerScore += score.player;
+    this._totalAiScore += score.ai;
+
+    // Update FluxEngine with FluxArena performance data
     const avgPos =
       score.positionSamples.length > 0
         ? score.positionSamples[0]
         : 0.5;
 
-    this._fluxEngine.updateHistory({
+    this._fluxEngine.updateFluxArenaHistory({
       knockoffs: score.knockoffs,
       selfKOs: score.selfKOs,
       avgPositionFromCenter: avgPos,
@@ -73,12 +151,65 @@ class NexusArena {
       totalScore: score.player,
     });
 
-    // Compute mutations
+    // Track player lane bias from FluxArena position for MirrorRace track generation
+    this._playerLaneBias = avgPos > 0.5 ? 0.3 : -0.3;
+
+    // Compute mutations for display
     const mutations = this._fluxEngine.computeMutations();
 
-    // Show results
-    this._showResults(score, mutations);
+    // Show transition before MirrorRace
+    this._showTransition('ROUND 2: FLUX ARENA', score.player, score.ai, mutations, () => {
+      this._startMirrorRace();
+    });
   }
+
+  /* ---- ROUND 3: MIRROR RACE ---- */
+
+  private _startMirrorRace(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('MIRROR_RACE');
+    this._mirrorRaceGame = new MirrorRaceGame(
+      this._engine,
+      this._input,
+      this._ghostRecorder,
+      this._playerLaneBias
+    );
+    this._mirrorRaceGame.setup((score: MirrorRaceScore) => {
+      this._onMirrorRaceComplete(score);
+    });
+    this._engine.setScene(this._mirrorRaceGame.scene);
+  }
+
+  private _onMirrorRaceComplete(score: MirrorRaceScore): void {
+    this._totalPlayerScore += score.player;
+    this._totalAiScore += score.ai;
+
+    // Update FluxEngine with MirrorRace data
+    this._fluxEngine.updateMirrorRaceHistory({
+      patternBreaks: score.patternBreaks,
+      crashes: score.crashes,
+      finishTime: score.finishTime,
+      totalScore: score.player,
+    });
+
+    // Compute final mutations for results display
+    const mutations = this._fluxEngine.computeMutations();
+
+    // Show final results with cumulative scores
+    const combinedScore: FluxArenaScore = {
+      player: this._totalPlayerScore,
+      ai: this._totalAiScore,
+      knockoffs: 0,
+      selfKOs: 0,
+      fluxEventsExploited: 0,
+      positionSamples: [],
+    };
+
+    this._showResults(combinedScore, mutations);
+  }
+
+  /* ---- RESULTS ---- */
 
   private _showResults(
     score: FluxArenaScore,
@@ -94,14 +225,28 @@ class NexusArena {
     this._engine.setScene(this._resultsScene.scene);
   }
 
+  /* ---- CLEANUP ---- */
+
   private _disposeCurrentScenes(): void {
     if (this._menuScene) {
       this._menuScene.dispose();
       this._menuScene = null;
     }
+    if (this._darkShotGame) {
+      this._darkShotGame.dispose();
+      this._darkShotGame = null;
+    }
+    if (this._transitionScene) {
+      this._transitionScene.dispose();
+      this._transitionScene = null;
+    }
     if (this._fluxArenaGame) {
       this._fluxArenaGame.dispose();
       this._fluxArenaGame = null;
+    }
+    if (this._mirrorRaceGame) {
+      this._mirrorRaceGame.dispose();
+      this._mirrorRaceGame = null;
     }
     if (this._resultsScene) {
       this._resultsScene.dispose();

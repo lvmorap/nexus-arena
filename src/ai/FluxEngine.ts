@@ -1,9 +1,24 @@
+import { logger } from '../utils/Logger';
+
 export interface PlayerPerformanceHistory {
   fluxArena: {
     knockoffs: number;
     selfKOs: number;
     avgPositionFromCenter: number;
     fluxEventsExploited: number;
+    totalScore: number;
+  };
+  darkShot: {
+    blindPockets: number;
+    litPockets: number;
+    scratches: number;
+    avgShotPower: number;
+    totalScore: number;
+  };
+  mirrorRace?: {
+    patternBreaks: number;
+    crashes: number;
+    finishTime: number;
     totalScore: number;
   };
 }
@@ -25,20 +40,53 @@ export class FluxEngine {
       fluxEventsExploited: 0,
       totalScore: 0,
     },
+    darkShot: {
+      blindPockets: 0,
+      litPockets: 0,
+      scratches: 0,
+      avgShotPower: 0.5,
+      totalScore: 0,
+    },
   };
 
   public get history(): PlayerPerformanceHistory {
     return this._history;
   }
 
+  /** @deprecated Use updateFluxArenaHistory instead */
   public updateHistory(partial: Partial<PlayerPerformanceHistory['fluxArena']>): void {
+    this.updateFluxArenaHistory(partial);
+  }
+
+  public updateFluxArenaHistory(partial: Partial<PlayerPerformanceHistory['fluxArena']>): void {
     Object.assign(this._history.fluxArena, partial);
+    logger.info('FluxEngine: updated fluxArena history');
+  }
+
+  public updateDarkShotHistory(partial: Partial<PlayerPerformanceHistory['darkShot']>): void {
+    Object.assign(this._history.darkShot, partial);
+    logger.info('FluxEngine: updated darkShot history');
+  }
+
+  public updateMirrorRaceHistory(partial: Partial<NonNullable<PlayerPerformanceHistory['mirrorRace']>>): void {
+    if (!this._history.mirrorRace) {
+      this._history.mirrorRace = {
+        patternBreaks: 0,
+        crashes: 0,
+        finishTime: 0,
+        totalScore: 0,
+      };
+    }
+    Object.assign(this._history.mirrorRace, partial);
+    logger.info('FluxEngine: updated mirrorRace history');
   }
 
   public computeMutations(): RuleMutation[] {
     const mutations: RuleMutation[] = [];
     const fa = this._history.fluxArena;
+    const ds = this._history.darkShot;
 
+    // FluxArena → mutations
     if (fa.selfKOs > fa.knockoffs) {
       mutations.push({
         id: 'arena_compress',
@@ -75,6 +123,27 @@ export class FluxEngine {
         displayName: 'DOMINANCE COUNTERED',
         description: 'Your push power is reduced by 20%',
         effect: 'PUSH_NERF',
+        favoredPlayer: 'AI',
+      });
+    }
+
+    // DarkShot → FluxArena mutations
+    if (ds.blindPockets > ds.litPockets) {
+      mutations.push({
+        id: 'shadow_step',
+        displayName: 'SHADOW STEP',
+        description: 'Player gains brief invisibility from dark-pocket mastery',
+        effect: 'PLAYER_INVISIBILITY',
+        favoredPlayer: 'PLAYER',
+      });
+    }
+
+    if (ds.scratches >= 2) {
+      mutations.push({
+        id: 'scratch_shrink',
+        displayName: 'SCRATCHES EXPLOITED',
+        description: 'Arena shrinks 10% at start due to sloppy shooting',
+        effect: 'ARENA_SHRINK_INITIAL',
         favoredPlayer: 'AI',
       });
     }

@@ -162,9 +162,10 @@ export class MenuScene {
 
     // Controls info
     const controls = new TextBlock('controls');
-    controls.text = 'WASD — Move  |  SPACE/Click — Push  |  Push the Nexari off the arena!';
+    controls.text =
+      'Round 1: Dark Shot (click+drag to aim)  |  Round 2: Flux Arena (WASD + SPACE)  |  Round 3: Mirror Race (A/D to steer)';
     controls.color = COLORS.NEXARI_GOLD;
-    controls.fontSize = 14;
+    controls.fontSize = 13;
     controls.fontFamily = 'Rajdhani, sans-serif';
     controls.height = '30px';
     controls.alpha = 0.6;
