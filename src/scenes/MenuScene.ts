@@ -21,10 +21,10 @@ export class MenuScene {
     return this._scene;
   }
 
-  public setup(onStart: () => void): void {
+  public setup(onStart: () => void, onTutorial?: () => void): void {
     this._onStart = onStart;
     this._buildBackground();
-    this._buildUI();
+    this._buildUI(onTutorial);
     logger.info('MenuScene setup complete');
   }
 
@@ -91,7 +91,7 @@ export class MenuScene {
     }
   }
 
-  private _buildUI(): void {
+  private _buildUI(onTutorial?: () => void): void {
     this._guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('menuUI', true, this._scene);
 
     // Container panel
@@ -133,6 +133,15 @@ export class MenuScene {
       if (this._onStart) this._onStart();
     });
     panel.addControl(startBtn);
+
+    // Rules of Flux (tutorial) button
+    if (onTutorial) {
+      const tutorialBtn = this._createMenuButton('RULES OF FLUX', COLORS.NEXARI_PURPLE);
+      tutorialBtn.onPointerUpObservable.add(() => {
+        onTutorial();
+      });
+      panel.addControl(tutorialBtn);
+    }
 
     // Theme explanation
     const themeText = new TextBlock('theme');

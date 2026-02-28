@@ -79,6 +79,7 @@ export class FluxArenaGame {
   private _fluxEventText!: TextBlock;
   private _ruleText!: TextBlock;
   private _instructionText!: TextBlock;
+  private _commentaryText!: TextBlock;
 
   // Countdown
   private _countdownActive = false;
@@ -346,6 +347,16 @@ export class FluxArenaGame {
     this._instructionText.top = '46%';
     this._instructionText.alpha = 0.7;
     this._guiTexture.addControl(this._instructionText);
+
+    // Xebasthiaan commentary (visible during flux events)
+    this._commentaryText = new TextBlock('commentary');
+    this._commentaryText.text = '';
+    this._commentaryText.color = COLORS.NEXARI_GOLD;
+    this._commentaryText.fontSize = 14;
+    this._commentaryText.fontFamily = 'Rajdhani, sans-serif';
+    this._commentaryText.top = '8%';
+    this._commentaryText.alpha = 0;
+    this._guiTexture.addControl(this._commentaryText);
   }
 
   private _startCountdown(): void {
@@ -636,6 +647,19 @@ export class FluxArenaGame {
 
     // Show announcement
     this._showFluxText(`⚡ ${event.displayName} ⚡\n${event.description}`, COLORS.NEXARI_PURPLE);
+
+    // Xebasthiaan commentary during flux events
+    const xebasthiaanLines = [
+      '"PERFORMANCE: ADEQUATE. POTENTIAL: STILL UNMEASURED." — XEBASTHIAAN',
+      '"THE SCORE DOES NOT CONCERN ME. YOUR METHOD DOES." — XEBASTHIAAN',
+      '"YOU FIGHT LIKE A SPECIES THAT HAS NEVER LOST EVERYTHING." — XEBASTHIAAN',
+    ];
+    const commentIdx = this._activeEffects.length % xebasthiaanLines.length;
+    this._commentaryText.text = xebasthiaanLines[commentIdx];
+    this._commentaryText.alpha = 0.7;
+    setTimeout(() => {
+      this._commentaryText.alpha = 0;
+    }, 3000);
 
     // Apply effect
     if (event.type === 'ARENA_SHRINK') {

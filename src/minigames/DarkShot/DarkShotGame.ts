@@ -93,6 +93,7 @@ export class DarkShotGame {
   private _roundText!: TextBlock;
   private _announcementText!: TextBlock;
   private _instructionText!: TextBlock;
+  private _commentaryText!: TextBlock;
 
   // Countdown
   private _countdownStartTime = 0;
@@ -389,6 +390,16 @@ export class DarkShotGame {
     this._instructionText.top = '46%';
     this._instructionText.alpha = 0.7;
     this._guiTexture.addControl(this._instructionText);
+
+    // Ithalokk ghost hands commentary
+    this._commentaryText = new TextBlock('commentary');
+    this._commentaryText.text = '';
+    this._commentaryText.color = COLORS.NEXARI_PURPLE;
+    this._commentaryText.fontSize = 14;
+    this._commentaryText.fontFamily = 'Rajdhani, sans-serif';
+    this._commentaryText.top = '8%';
+    this._commentaryText.alpha = 0;
+    this._guiTexture.addControl(this._commentaryText);
   }
 
   /* ------------------------------------------------------------------ */
@@ -746,6 +757,14 @@ export class DarkShotGame {
       points = 3;
       label = 'BLIND PORTAL! +3';
       this._score.blindPockets++;
+
+      // Ithalokk's ghost hands commentary on blind shots
+      this._commentaryText.text =
+        '"THEY CHOOSE BLINDNESS. THEY REWARD BOLDNESS." — ITHALOKK\'S NOTES';
+      this._commentaryText.alpha = 0.6;
+      setTimeout(() => {
+        this._commentaryText.alpha = 0;
+      }, 3000);
     } else if (pocketType === 'shadow') {
       points = 2;
       label = 'SHADOW PORTAL! +2';

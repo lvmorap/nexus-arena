@@ -5,9 +5,12 @@ import earcut from 'earcut';
 import { Engine } from './core/Engine';
 import { GameStateMachine } from './core/GameStateMachine';
 import { InputManager } from './core/InputManager';
+import { AudioManager } from './core/AudioManager';
 import { FluxEngine } from './ai/FluxEngine';
+import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { IntroScene } from './scenes/IntroScene';
+import { TutorialScene } from './scenes/TutorialScene';
 import { TransitionScene } from './scenes/TransitionScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { DarkShotGame, DarkShotScore } from './minigames/DarkShot/DarkShotGame';
@@ -20,6 +23,7 @@ class NexusArena {
   private _engine: Engine;
   private _stateMachine: GameStateMachine;
   private _input: InputManager;
+  private _audio: AudioManager;
   private _fluxEngine: FluxEngine;
   private _ghostRecorder: GhostRecorder;
 
@@ -29,8 +33,10 @@ class NexusArena {
   private _playerLaneBias = 0;
 
   // Active scenes (only one at a time)
+  private _bootScene: BootScene | null = null;
   private _menuScene: MenuScene | null = null;
   private _introScene: IntroScene | null = null;
+  private _tutorialScene: TutorialScene | null = null;
   private _darkShotGame: DarkShotGame | null = null;
   private _transitionScene: TransitionScene | null = null;
   private _fluxArenaGame: FluxArenaGame | null = null;
@@ -41,6 +47,7 @@ class NexusArena {
     this._engine = new Engine(canvas);
     this._stateMachine = new GameStateMachine();
     this._input = new InputManager(canvas);
+    this._audio = new AudioManager();
     this._fluxEngine = new FluxEngine();
     this._ghostRecorder = new GhostRecorder();
 
@@ -49,7 +56,20 @@ class NexusArena {
 
   public async start(): Promise<void> {
     logger.info('NEXUS ARENA starting...');
-    this._showMenu();
+    this._showBoot();
+  }
+
+  /* ---- BOOT ---- */
+
+  private _showBoot(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('BOOT');
+    this._bootScene = new BootScene(this._engine);
+    this._bootScene.setup(() => {
+      this._showMenu();
+    });
+    this._engine.setScene(this._bootScene.scene);
   }
 
   private _showMenu(): void {
@@ -63,11 +83,30 @@ class NexusArena {
     this._ghostRecorder = new GhostRecorder();
 
     this._stateMachine.transitionTo('MENU');
+    this._audio.playMusic('MENU_AMBIENT');
     this._menuScene = new MenuScene(this._engine);
-    this._menuScene.setup(() => {
-      this._showIntro();
-    });
+    this._menuScene.setup(
+      () => {
+        this._showIntro();
+      },
+      () => {
+        this._showTutorial();
+      }
+    );
     this._engine.setScene(this._menuScene.scene);
+  }
+
+  /* ---- TUTORIAL ---- */
+
+  private _showTutorial(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('TUTORIAL');
+    this._tutorialScene = new TutorialScene(this._engine);
+    this._tutorialScene.setup(() => {
+      this._showMenu();
+    });
+    this._engine.setScene(this._tutorialScene.scene);
   }
 
   /* ---- INTRO ---- */
@@ -250,6 +289,10 @@ class NexusArena {
   /* ---- CLEANUP ---- */
 
   private _disposeCurrentScenes(): void {
+    if (this._bootScene) {
+      this._bootScene.dispose();
+      this._bootScene = null;
+    }
     if (this._menuScene) {
       this._menuScene.dispose();
       this._menuScene = null;
@@ -257,6 +300,10 @@ class NexusArena {
     if (this._introScene) {
       this._introScene.dispose();
       this._introScene = null;
+    }
+    if (this._tutorialScene) {
+      this._tutorialScene.dispose();
+      this._tutorialScene = null;
     }
     if (this._darkShotGame) {
       this._darkShotGame.dispose();
