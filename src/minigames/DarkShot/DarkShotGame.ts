@@ -118,6 +118,18 @@ export class DarkShotGame {
   // Config shortcut
   private readonly _cfg = GAME_CONFIG.DARK_SHOT;
 
+  // Judgment Orb
+  private _judgmentOrb: Orb | null = null;
+  private _centralPortal: Portal | null = null;
+
+  // D'Anielor's Mirror
+  private _mirrorMesh: Mesh | null = null;
+  private _duplicatedOrbs: Set<Mesh> = new Set();
+
+  // Ithalokk's Ghost Hands
+  private _ghostHandTimer = 0;
+  private _ghostHandInterval = 10;
+
   constructor(engine: Engine, input: InputManager) {
     this._engine = engine;
     this._input = input;
@@ -138,6 +150,8 @@ export class DarkShotGame {
     this._buildUI();
     this._setupPointerInput();
     this._setupAccessibility();
+    this._buildCentralPortal();
+    this._buildJudgmentOrb();
     this._startCountdown();
 
     this._scene.registerBeforeRender(() => {
@@ -660,6 +674,8 @@ export class DarkShotGame {
     this._checkOrbCollisions();
     this._checkTableBoundary();
     this._checkPortalCollisions();
+    this._updateGhostHands(dt);
+    this._updateMirror();
 
     if (this._phase === 'shooting' && this._areAllOrbsStopped()) {
       this._onShotComplete();
@@ -845,6 +861,8 @@ export class DarkShotGame {
   private _checkPortalCollisions(): void {
     for (const orb of this._orbs) {
       if (!orb.isActive) continue;
+      // Judgment orb can only be pocketed through the central portal
+      if (orb === this._judgmentOrb) continue;
       for (const portal of this._portals) {
         const dx = orb.mesh.position.x - portal.position.x;
         const dz = orb.mesh.position.z - portal.position.z;
@@ -852,6 +870,15 @@ export class DarkShotGame {
           this._onOrbPocketed(orb);
           break;
         }
+      }
+    }
+
+    // Judgment Orb: check against central portal only
+    if (this._judgmentOrb?.isActive && this._centralPortal) {
+      const dx = this._judgmentOrb.mesh.position.x - this._centralPortal.position.x;
+      const dz = this._judgmentOrb.mesh.position.z - this._centralPortal.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 1.5) {
+        this._onJudgmentOrbPocketed();
       }
     }
   }
@@ -965,6 +992,11 @@ export class DarkShotGame {
       this._currentTurn = 'player';
       this._currentRound++;
 
+      // Spawn D'Anielor's Mirror at round 3
+      if (this._currentRound === 3 && !this._mirrorMesh) {
+        this._spawnMirror();
+      }
+
       if (this._currentRound > this._cfg.TOTAL_ROUNDS) {
         this._endMatch();
         return;
@@ -972,6 +1004,205 @@ export class DarkShotGame {
 
       this._phase = 'aiming';
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Advanced Mechanics                                                  */
+  /* ------------------------------------------------------------------ */
+
+  private _buildCentralPortal(): void {
+    const gold = hexToRgb(COLORS.NEXARI_GOLD);
+    const pos = new Vector3(0, 0.2, 0);
+
+    const sphere = MeshBuilder.CreateSphere(
+      'centralPortal',
+      { diameter: this._cfg.PORTAL_RADIUS },
+      this._scene,
+    );
+    sphere.position = pos.clone();
+    const sMat = new StandardMaterial('centralPortalMat', this._scene);
+    sMat.emissiveColor = new Color3(gold.r, gold.g, gold.b);
+    sMat.diffuseColor = new Color3(gold.r * 0.3, gold.g * 0.3, gold.b * 0.3);
+    sMat.alpha = 0.5;
+    sphere.material = sMat;
+
+    const torus = MeshBuilder.CreateTorus(
+      'centralPortalRing',
+      { diameter: this._cfg.PORTAL_RADIUS * 1.5, thickness: 0.15, tessellation: 24 },
+      this._scene,
+    );
+    torus.position = pos.clone();
+    const tMat = new StandardMaterial('centralTorusMat', this._scene);
+    tMat.emissiveColor = new Color3(gold.r, gold.g, gold.b);
+    tMat.disableLighting = true;
+    torus.material = tMat;
+
+    const pLight = new PointLight('centralPortalLight', pos.clone(), this._scene);
+    pLight.diffuse = new Color3(gold.r, gold.g, gold.b);
+    pLight.intensity = 0.6;
+    pLight.range = 4;
+
+    this._centralPortal = { mesh: sphere, torusMesh: torus, position: pos };
+    logger.info('DarkShot: Central portal built');
+  }
+
+  private _buildJudgmentOrb(): void {
+    const gold = hexToRgb(COLORS.NEXARI_GOLD);
+    const mesh = MeshBuilder.CreateTorusKnot(
+      'judgmentOrb',
+      { radius: 0.35, tube: 0.12, radialSegments: 32, tubularSegments: 12 },
+      this._scene,
+    );
+    mesh.position = new Vector3(0, 0.5, 2);
+
+    const mat = new StandardMaterial('judgmentOrbMat', this._scene);
+    mat.diffuseColor = new Color3(gold.r, gold.g, gold.b);
+    mat.emissiveColor = new Color3(gold.r * 0.6, gold.g * 0.6, gold.b * 0.6);
+    mat.specularColor = new Color3(1, 1, 1);
+    mesh.material = mat;
+
+    const light = new PointLight('judgmentOrbLight', new Vector3(0, 1, 2), this._scene);
+    light.diffuse = new Color3(gold.r, gold.g, gold.b);
+    light.intensity = 0.8;
+    light.range = 6;
+
+    this._judgmentOrb = { mesh, velocity: Vector3.Zero(), light, isCue: false, isActive: true };
+    this._orbs.push(this._judgmentOrb);
+    logger.info('DarkShot: Judgment Orb placed');
+  }
+
+  private _onJudgmentOrbPocketed(): void {
+    if (!this._judgmentOrb) return;
+    this._judgmentOrb.isActive = false;
+    this._judgmentOrb.mesh.setEnabled(false);
+    this._judgmentOrb.light.intensity = 0;
+    this._judgmentOrb.velocity = Vector3.Zero();
+
+    this._score.player = 0;
+    this._score.ai = 0;
+    this._showAnnouncement('JUDGMENT! ALL SCORES RESET!', COLORS.DANGER);
+    this._screenShake.trigger(0.5, 500);
+    this._commentaryText.text = '"THE JUDGMENT ORB SPARES NO ONE." — ITHALOKK';
+    this._commentaryText.alpha = 0.8;
+    setTimeout(() => { this._commentaryText.alpha = 0; }, 4000);
+    logger.info('DarkShot: Judgment Orb pocketed — all scores reset');
+  }
+
+  private _spawnMirror(): void {
+    const gold = hexToRgb(COLORS.NEXARI_GOLD);
+    this._mirrorMesh = MeshBuilder.CreatePlane(
+      'danielorMirror',
+      { width: 4, height: 2 },
+      this._scene,
+    );
+    const angle = randomRange(0, Math.PI * 2);
+    const dist = randomRange(2, this._cfg.TABLE_RADIUS * 0.6);
+    this._mirrorMesh.position = new Vector3(Math.cos(angle) * dist, 1, Math.sin(angle) * dist);
+    this._mirrorMesh.rotation.y = angle;
+
+    const mat = new StandardMaterial('mirrorMat', this._scene);
+    mat.emissiveColor = new Color3(gold.r * 0.4, gold.g * 0.4, gold.b * 0.4);
+    mat.diffuseColor = new Color3(gold.r * 0.2, gold.g * 0.2, gold.b * 0.2);
+    mat.alpha = 0.35;
+    this._mirrorMesh.material = mat;
+
+    this._duplicatedOrbs.clear();
+    this._showAnnouncement("D'ANIELOR'S MIRROR APPEARS!", COLORS.NEXARI_GOLD);
+    logger.info("DarkShot: D'Anielor's Mirror spawned");
+  }
+
+  private _updateMirror(): void {
+    if (!this._mirrorMesh) return;
+
+    this._mirrorMesh.rotation.y += 0.001;
+
+    const mirrorPos = this._mirrorMesh.position;
+    const mirrorAngle = this._mirrorMesh.rotation.y;
+    const mirrorNormalX = Math.sin(mirrorAngle);
+    const mirrorNormalZ = Math.cos(mirrorAngle);
+
+    for (const orb of this._orbs) {
+      if (!orb.isActive || orb.isCue) continue;
+      if (this._duplicatedOrbs.has(orb.mesh)) continue;
+
+      const dx = orb.mesh.position.x - mirrorPos.x;
+      const dz = orb.mesh.position.z - mirrorPos.z;
+      const dotPos = dx * mirrorNormalX + dz * mirrorNormalZ;
+      const distAlongPlane = Math.abs(dx * (-mirrorNormalZ) + dz * mirrorNormalX);
+
+      if (Math.abs(dotPos) < 0.5 && distAlongPlane < 2 && orb.velocity.length() > 0.5) {
+        this._duplicateOrb(orb);
+        this._duplicatedOrbs.add(orb.mesh);
+      }
+    }
+  }
+
+  private _duplicateOrb(original: Orb): void {
+    const gold = hexToRgb(COLORS.NEXARI_GOLD);
+    const newOrb = this._createOrb(
+      `mirror_orb_${this._orbs.length}`,
+      original.mesh.position.clone(),
+      false,
+    );
+
+    newOrb.velocity = new Vector3(
+      original.velocity.x * 0.8 + randomRange(-1, 1),
+      0,
+      original.velocity.z * 0.8 + randomRange(-1, 1),
+    );
+
+    const mat = newOrb.mesh.material as StandardMaterial;
+    mat.diffuseColor = new Color3(gold.r, gold.g, gold.b);
+    mat.emissiveColor = new Color3(gold.r * 0.5, gold.g * 0.5, gold.b * 0.5);
+
+    this._orbs.push(newOrb);
+    this._duplicatedOrbs.add(newOrb.mesh);
+    this._showAnnouncement("D'ANIELOR'S MIRROR DUPLICATES!", COLORS.NEXARI_GOLD);
+    logger.info("DarkShot: Orb duplicated by D'Anielor's Mirror");
+  }
+
+  private _updateGhostHands(dt: number): void {
+    this._ghostHandTimer += dt;
+    if (this._ghostHandTimer < this._ghostHandInterval) return;
+
+    this._ghostHandTimer = 0;
+    this._ghostHandInterval = randomRange(8, 12);
+
+    const candidates = this._orbs.filter((o) => !o.isCue && o.isActive && o !== this._judgmentOrb);
+    if (candidates.length === 0) return;
+
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+
+    target.velocity.addInPlace(new Vector3(
+      randomRange(-2, 2),
+      0,
+      randomRange(-2, 2),
+    ));
+
+    // Visual: brief ghost hand at orb position
+    const hand = MeshBuilder.CreateBox(
+      'ghostHand',
+      { width: 0.8, height: 0.3, depth: 0.5 },
+      this._scene,
+    );
+    hand.position = target.mesh.position.clone();
+    hand.position.y += 0.5;
+    const handMat = new StandardMaterial('ghostHandMat', this._scene);
+    const purple = hexToRgb(COLORS.NEXARI_PURPLE);
+    handMat.emissiveColor = new Color3(purple.r, purple.g, purple.b);
+    handMat.alpha = 0.5;
+    handMat.disableLighting = true;
+    hand.material = handMat;
+
+    setTimeout(() => {
+      if (!hand.isDisposed()) hand.dispose();
+    }, 800);
+
+    this._showAnnouncement('ITHALOKK INTERFERES!', COLORS.NEXARI_PURPLE);
+    this._commentaryText.text = '"MY HANDS ARE EVERYWHERE." — ITHALOKK';
+    this._commentaryText.alpha = 0.7;
+    setTimeout(() => { this._commentaryText.alpha = 0; }, 2500);
+    logger.info('DarkShot: Ghost hand pushed an orb');
   }
 
   /* ------------------------------------------------------------------ */
@@ -1098,6 +1329,10 @@ export class DarkShotGame {
     if (this._pointerMoveHandler) canvas.removeEventListener('pointermove', this._pointerMoveHandler);
     if (this._pointerUpHandler) canvas.removeEventListener('pointerup', this._pointerUpHandler);
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._mirrorMesh && !this._mirrorMesh.isDisposed()) this._mirrorMesh.dispose();
+    if (this._judgmentOrb?.mesh && !this._judgmentOrb.mesh.isDisposed()) this._judgmentOrb.mesh.dispose();
+    if (this._centralPortal?.mesh && !this._centralPortal.mesh.isDisposed()) this._centralPortal.mesh.dispose();
+    if (this._centralPortal?.torusMesh && !this._centralPortal.torusMesh.isDisposed()) this._centralPortal.torusMesh.dispose();
     this._guiTexture.dispose();
     this._scene.dispose();
   }

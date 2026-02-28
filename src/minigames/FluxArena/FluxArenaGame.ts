@@ -115,6 +115,11 @@ export class FluxArenaGame {
   private _ruleOverlayVisible = false;
   private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
+  // GRAVUMO Impact Mass
+  private _gravumoMass = 0;
+  private _nexariBlowReady = false;
+  private _gravumoText!: TextBlock;
+
   constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
     this._input = input;
@@ -392,6 +397,15 @@ export class FluxArenaGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    // GRAVUMO mass indicator
+    this._gravumoText = new TextBlock('gravumo');
+    this._gravumoText.text = 'GRAVUMO: 0/5';
+    this._gravumoText.color = COLORS.NEXARI_GOLD;
+    this._gravumoText.fontSize = 20;
+    this._gravumoText.fontFamily = 'Orbitron, sans-serif';
+    this._gravumoText.top = '-25%';
+    this._guiTexture.addControl(this._gravumoText);
 
     this._ruleOverlay = new TextBlock('ruleOverlay');
     this._ruleOverlay.text = 'FLUX ARENA RULES:\n• Push opponents off the platform (+2 pts)\n• Stay on the platform to survive\n• Flux Events change rules every 20s\n• Self-KO costs -1 point\n\nPress ? to close';
@@ -674,9 +688,18 @@ export class FluxArenaGame {
   }
 
   private _playerPush(now: number): void {
+    // GRAVUMO: Nexari Blow — radial gravity impulse
+    if (this._nexariBlowReady) {
+      this._triggerNexariBlow();
+      return;
+    }
+
     const direction = this._aiMesh.position.subtract(this._playerMesh.position);
     const dist = direction.length();
-    if (dist > 5) return; // Too far
+    if (dist > 5) {
+      this._addGravumoMass(0.5);
+      return; // Too far, but still gains mass
+    }
 
     direction.normalize();
     let power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * (1 - dist / 8) * this._pushPowerModifier;
@@ -714,6 +737,45 @@ export class FluxArenaGame {
 
     // Visual feedback - brief color flash
     this._flashMesh(this._playerMesh, COLORS.SUCCESS);
+
+    // GRAVUMO: Successful hit adds mass
+    this._addGravumoMass(1);
+  }
+
+  private _addGravumoMass(amount: number): void {
+    this._gravumoMass = Math.min(this._gravumoMass + amount, 5);
+    if (this._gravumoMass >= 5 && !this._nexariBlowReady) {
+      this._nexariBlowReady = true;
+      this._showFluxText('NEXARI BLOW READY!', COLORS.NEXARI_GOLD);
+      logger.info('FluxArena: Nexari Blow unlocked');
+    }
+  }
+
+  private _triggerNexariBlow(): void {
+    const power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * 3 * this._pushPowerModifier;
+
+    // Push AI away from player
+    const toAI = this._aiMesh.position.subtract(this._playerMesh.position);
+    if (toAI.length() > 0.1) {
+      toAI.normalize();
+      this._aiVelocity.addInPlace(toAI.scale(power));
+    }
+
+    // Push summon away from player if active
+    if (this._summonMesh && !this._summonMesh.isDisposed()) {
+      const toSummon = this._summonMesh.position.subtract(this._playerMesh.position);
+      if (toSummon.length() > 0.1) {
+        toSummon.normalize();
+        this._summonVelocity.addInPlace(toSummon.scale(power * 0.5));
+      }
+    }
+
+    this._gravumoMass = 0;
+    this._nexariBlowReady = false;
+    this._screenShake.trigger(0.5, 500);
+    this._showFluxText('NEXARI BLOW!', COLORS.NEXARI_GOLD);
+    this._flashMesh(this._playerMesh, COLORS.NEXARI_GOLD);
+    logger.info('FluxArena: Nexari Blow triggered');
   }
 
   private _aiPush(): void {
@@ -940,6 +1002,14 @@ export class FluxArenaGame {
 
     if (secs <= 10) {
       this._timerText.color = COLORS.DANGER;
+    }
+
+    // GRAVUMO HUD
+    this._gravumoText.text = `GRAVUMO: ${Math.floor(this._gravumoMass)}/5`;
+    if (this._nexariBlowReady) {
+      this._gravumoText.color = COLORS.SUCCESS;
+    } else {
+      this._gravumoText.color = COLORS.NEXARI_GOLD;
     }
   }
 
