@@ -2,7 +2,7 @@
 
 🏆 Game Jam Entry — Theme: "Reinventing Competition"
 
-## �� Play Now
+## 🎮 Play Now
 
 [Play on GitHub Pages](https://lvmorap.github.io/nexus-arena/)
 
