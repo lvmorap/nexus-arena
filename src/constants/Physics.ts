@@ -1,0 +1,7 @@
+export const PHYSICS = {
+  GRAVITY: -9.81,
+  PLAYER_LINEAR_DAMPING: 0.3,
+  PLAYER_ANGULAR_DAMPING: 0.8,
+  RESTITUTION: 0.3,
+  FRICTION: 0.6,
+} as const;
