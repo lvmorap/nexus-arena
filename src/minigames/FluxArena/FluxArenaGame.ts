@@ -16,6 +16,7 @@ import { Engine } from '../../core/Engine';
 import { InputManager, InputState } from '../../core/InputManager';
 import { NexariAdaptiveAI } from '../../ai/NexariAdaptiveAI';
 import { RuleMutator, FluxEventType } from './RuleMutator';
+import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, distanceXZ } from '../../utils/MathUtils';
@@ -83,14 +84,52 @@ export class FluxArenaGame {
   private _countdownActive = false;
   private _countdownStartTime = 0;
 
-  constructor(engine: Engine, input: InputManager) {
+  // Inherited mutations from previous rounds
+  private _initialMutations: RuleMutation[] = [];
+  private _pushPowerModifier = 1.0;
+  private _playerInvisibilityCharges = 0;
+  private _hasCenterWeakness = false;
+  private _fluxEventInterval: number = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
+
+  constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
     this._input = input;
     this._ai = new NexariAdaptiveAI(GAME_CONFIG.FLUX_ARENA.AI_REACTION_MS);
     this._ruleMutator = new RuleMutator();
     this._arenaRadius = GAME_CONFIG.FLUX_ARENA.ARENA_RADIUS;
+    this._initialMutations = initialMutations;
     this._scene = new Scene(this._engine.babylonEngine);
     this._scene.clearColor = new Color4(0.02, 0.01, 0.05, 1);
+
+    // Apply inherited mutations from DarkShot performance
+    this._applyInitialMutations();
+  }
+
+  private _applyInitialMutations(): void {
+    for (const mut of this._initialMutations) {
+      switch (mut.effect) {
+        case 'ARENA_SHRINK_INITIAL':
+          this._arenaRadius *= 0.9;
+          logger.info('FluxArena: Arena shrunk 10% from DarkShot scratches');
+          break;
+        case 'PUSH_NERF':
+          this._pushPowerModifier *= 0.8;
+          logger.info('FluxArena: Push power reduced 20% from dominance');
+          break;
+        case 'PLAYER_INVISIBILITY':
+          this._playerInvisibilityCharges = 3;
+          logger.info('FluxArena: Player earned 3 invisibility charges from blind mastery');
+          break;
+        case 'CENTER_WEAKNESS':
+          this._hasCenterWeakness = true;
+          logger.info('FluxArena: Center position weakens push power');
+          break;
+        case 'FASTER_FLUX':
+          this._fluxEventInterval = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS * 0.6;
+          logger.info('FluxArena: Flux events will trigger more frequently');
+          break;
+      }
+    }
   }
 
   public get scene(): Scene {
@@ -313,6 +352,33 @@ export class FluxArenaGame {
     this._countdownActive = true;
     this._countdownStartTime = performance.now();
 
+    // Show inherited mutations from previous rounds
+    if (this._initialMutations.length > 0) {
+      const mutText = new TextBlock('inheritedMuts');
+      const mutNames = this._initialMutations.map((m) => `[${m.displayName}]`).join('  ');
+      mutText.text = `ACTIVE RULES: ${mutNames}`;
+      mutText.color = COLORS.NEXARI_PURPLE;
+      mutText.fontSize = 16;
+      mutText.fontFamily = 'Rajdhani, sans-serif';
+      mutText.top = '15%';
+      mutText.alpha = 0.9;
+      this._guiTexture.addControl(mutText);
+
+      // Fade out after 5 seconds
+      setTimeout(() => {
+        let a = 0.9;
+        const fade = setInterval(() => {
+          a -= 0.03;
+          if (a <= 0) {
+            mutText.dispose();
+            clearInterval(fade);
+          } else {
+            mutText.alpha = a;
+          }
+        }, 50);
+      }, 5000);
+    }
+
     const countdownText = new TextBlock('countdown');
     countdownText.text = '3';
     countdownText.color = COLORS.NEXARI_GOLD;
@@ -364,7 +430,7 @@ export class FluxArenaGame {
     this._activeEffects = this._activeEffects.filter((e) => e.expiresAt === 0 || now < e.expiresAt);
 
     // Trigger flux events
-    if (now - this._lastFluxEventTime > GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS) {
+    if (now - this._lastFluxEventTime > this._fluxEventInterval) {
       this._triggerFluxEvent();
       this._lastFluxEventTime = now;
     }
@@ -474,11 +540,31 @@ export class FluxArenaGame {
     if (dist > 5) return; // Too far
 
     direction.normalize();
-    const power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * (1 - dist / 8);
+    let power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * (1 - dist / 8) * this._pushPowerModifier;
+
+    // CENTER_WEAKNESS mutation: reduce push power when near center
+    if (this._hasCenterWeakness) {
+      const playerDist = distanceXZ(this._playerMesh.position, Vector3.Zero());
+      if (playerDist < this._arenaRadius * 0.3) {
+        power *= 0.6;
+      }
+    }
+
     this._aiVelocity.addInPlace(direction.scale(power));
 
     // Small self knockback
     this._playerVelocity.addInPlace(direction.scale(-power * 0.15));
+
+    // Use invisibility charge on push (brief visual feedback)
+    if (this._playerInvisibilityCharges > 0) {
+      this._playerInvisibilityCharges--;
+      const pMat = this._playerMesh.material as StandardMaterial;
+      pMat.alpha = 0.3;
+      setTimeout(() => {
+        pMat.alpha = 1.0;
+      }, 1500);
+      this._showFluxText('SHADOW STEP ACTIVATED!', COLORS.NEXARI_PURPLE);
+    }
 
     // Check if scored within 3s of flux event
     const timeSinceFlux = now - this._lastFluxEventTime;
