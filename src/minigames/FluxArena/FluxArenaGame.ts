@@ -88,6 +88,8 @@ export class FluxArenaGame {
   private _initialMutations: RuleMutation[] = [];
   private _pushPowerModifier = 1.0;
   private _playerInvisibilityCharges = 0;
+  private _hasCenterWeakness = false;
+  private _fluxEventInterval: number = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
 
   constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
@@ -119,9 +121,11 @@ export class FluxArenaGame {
           logger.info('FluxArena: Player earned 3 invisibility charges from blind mastery');
           break;
         case 'CENTER_WEAKNESS':
+          this._hasCenterWeakness = true;
           logger.info('FluxArena: Center position weakens push power');
           break;
         case 'FASTER_FLUX':
+          this._fluxEventInterval = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS * 0.6;
           logger.info('FluxArena: Flux events will trigger more frequently');
           break;
       }
@@ -426,10 +430,7 @@ export class FluxArenaGame {
     this._activeEffects = this._activeEffects.filter((e) => e.expiresAt === 0 || now < e.expiresAt);
 
     // Trigger flux events
-    const fluxInterval = this._initialMutations.some((m) => m.effect === 'FASTER_FLUX')
-      ? GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS * 0.6
-      : GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
-    if (now - this._lastFluxEventTime > fluxInterval) {
+    if (now - this._lastFluxEventTime > this._fluxEventInterval) {
       this._triggerFluxEvent();
       this._lastFluxEventTime = now;
     }
@@ -542,8 +543,7 @@ export class FluxArenaGame {
     let power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * (1 - dist / 8) * this._pushPowerModifier;
 
     // CENTER_WEAKNESS mutation: reduce push power when near center
-    const hasCenterWeakness = this._initialMutations.some((m) => m.effect === 'CENTER_WEAKNESS');
-    if (hasCenterWeakness) {
+    if (this._hasCenterWeakness) {
       const playerDist = distanceXZ(this._playerMesh.position, Vector3.Zero());
       if (playerDist < this._arenaRadius * 0.3) {
         power *= 0.6;
