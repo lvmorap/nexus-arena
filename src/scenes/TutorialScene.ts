@@ -59,7 +59,6 @@ export class TutorialScene {
   private _keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _canAdvance = false;
   private _advanceTimeout: ReturnType<typeof setTimeout> | null = null;
-  private _pulseObserver: (() => void) | null = null;
   private _isComplete = false;
 
   // UI elements updated per step
