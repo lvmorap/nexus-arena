@@ -10,10 +10,12 @@ import {
   FreeCamera,
   Mesh,
   GlowLayer,
+  DefaultRenderingPipeline,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
 import { InputManager } from '../../core/InputManager';
+import { ScreenShake } from '../../utils/ScreenShake';
 import { GhostRecorder, GhostBehavior } from './GhostRecorder';
 import { TrackGenerator, Obstacle } from './TrackGenerator';
 import { RuleMutation } from '../../ai/FluxEngine';
@@ -56,6 +58,7 @@ export class MirrorRaceGame {
     ghostFinished: false,
   };
 
+  private _screenShake = new ScreenShake();
   private _isRunning = false;
   private _matchStartTime = 0;
   private _playerZ = 0;
@@ -167,6 +170,18 @@ export class MirrorRaceGame {
     // Glow layer
     const glow = new GlowLayer('glow', this._scene);
     glow.intensity = 0.8;
+
+    // Post-processing pipeline
+    const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, this._scene, [this._camera]);
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.5;
+    pipeline.bloomWeight = 0.5;
+    pipeline.bloomKernel = 64;
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.vignetteEnabled = true;
+    pipeline.imageProcessing.vignetteWeight = 3.0;
+    pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
     // Neon tunnel walls
     const tunnelLeft = this._createTunnelWall('left', -5);
@@ -475,6 +490,11 @@ export class MirrorRaceGame {
     // Check finish
     this._checkFinish(elapsed);
 
+    const shakeOffset = this._screenShake.update(dt * 1000);
+    if (shakeOffset.length() > 0) {
+      this._camera.position.addInPlace(shakeOffset);
+    }
+
     // Update UI
     this._updateUI(elapsed);
   }
@@ -552,6 +572,7 @@ export class MirrorRaceGame {
           this._playerZ -= 10;
           this._score.player += 1;
           this._showAnnouncement('FLUX WARP! +1', COLORS.NEXARI_CYAN);
+          this._screenShake.trigger(0.2, 200);
         }
         continue;
       }
@@ -569,6 +590,7 @@ export class MirrorRaceGame {
         this._score.crashes++;
         this._slowdownTimer = 1.5;
         this._showAnnouncement('CRASH!', COLORS.DANGER);
+        this._screenShake.trigger(0.3, 300);
 
         // Ithalokk on crashes
         if (this._score.crashes === 1) {

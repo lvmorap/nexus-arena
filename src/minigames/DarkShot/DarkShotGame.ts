@@ -10,10 +10,12 @@ import {
   ArcRotateCamera,
   Mesh,
   GlowLayer,
+  DefaultRenderingPipeline,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
 import { InputManager } from '../../core/InputManager';
+import { ScreenShake } from '../../utils/ScreenShake';
 import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, randomRange, clamp } from '../../utils/MathUtils';
@@ -102,6 +104,10 @@ export class DarkShotGame {
   private _aiDelayTimer = 0;
   private _aiHasShot = false;
 
+  // Visual effects
+  private _activeSquashes: { mesh: Mesh; startTime: number; dur: number }[] = [];
+  private _screenShake = new ScreenShake();
+
   // Config shortcut
   private readonly _cfg = GAME_CONFIG.DARK_SHOT;
 
@@ -159,6 +165,18 @@ export class DarkShotGame {
     // Glow layer for portals & orbs
     const glow = new GlowLayer('glow', this._scene);
     glow.intensity = 0.8;
+
+    // Post-processing pipeline
+    const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, this._scene, [this._camera]);
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.7;
+    pipeline.bloomWeight = 0.3;
+    pipeline.bloomKernel = 64;
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.vignetteEnabled = true;
+    pipeline.imageProcessing.vignetteWeight = 2.5;
+    pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
     // Starfield
     for (let i = 0; i < 200; i++) {
@@ -591,6 +609,13 @@ export class DarkShotGame {
       this._updateAI(dt);
     }
 
+    this._updateSquashStretch();
+
+    const shakeOffset = this._screenShake.update(dt * 1000);
+    if (shakeOffset.length() > 0) {
+      this._camera.position.addInPlace(shakeOffset);
+    }
+
     this._updateUI();
   }
 
@@ -603,6 +628,22 @@ export class DarkShotGame {
       const pulse = 0.9 + Math.sin(now * 0.003 + i) * 0.1;
       this._portals[i].torusMesh.scaling = new Vector3(pulse, pulse, pulse);
     }
+  }
+
+  private _updateSquashStretch(): void {
+    const now = performance.now();
+    this._activeSquashes = this._activeSquashes.filter((s) => {
+      const t = (now - s.startTime) / s.dur;
+      if (t >= 1) {
+        s.mesh.scaling = new Vector3(1, 1, 1);
+        return false;
+      }
+      const elastic = t === 0 || t === 1 ? t : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+      const scaleX = 1 + (0.4) * (1 - elastic);
+      const scaleY = 1 - (0.3) * (1 - elastic);
+      s.mesh.scaling = new Vector3(scaleX, scaleY, scaleX);
+      return true;
+    });
   }
 
   private _updateOrbPhysics(dt: number): void {
@@ -680,6 +721,16 @@ export class DarkShotGame {
           const overlap = minDist - dist;
           a.mesh.position.addInPlace(normal.scale(overlap / 2));
           b.mesh.position.addInPlace(normal.scale(-overlap / 2));
+
+          // Squash & stretch on collision
+          const squashDuration = 180;
+          const squashA = { mesh: a.mesh, startTime: performance.now(), dur: squashDuration };
+          const squashB = { mesh: b.mesh, startTime: performance.now(), dur: squashDuration };
+          this._activeSquashes.push(squashA, squashB);
+          a.mesh.scaling = new Vector3(1.4, 0.7, 1.4);
+          b.mesh.scaling = new Vector3(1.4, 0.7, 1.4);
+
+          this._screenShake.trigger(0.08, 100);
         }
       }
     }
@@ -748,6 +799,7 @@ export class DarkShotGame {
       }
       this._score.scratches++;
       this._showAnnouncement('SCRATCH! -1', COLORS.DANGER);
+      this._screenShake.trigger(0.15, 200);
       logger.info('Scratch! Cue orb pocketed');
 
       // Reset cue
@@ -766,6 +818,7 @@ export class DarkShotGame {
       points = 3;
       label = 'BLIND PORTAL! +3';
       this._score.blindPockets++;
+      this._screenShake.trigger(0.4, 400);
 
       // Ithalokk's ghost hands commentary on blind shots
       this._commentaryText.text =

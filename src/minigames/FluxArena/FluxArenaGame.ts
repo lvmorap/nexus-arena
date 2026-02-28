@@ -10,10 +10,12 @@ import {
   ArcRotateCamera,
   Mesh,
   GlowLayer,
+  DefaultRenderingPipeline,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
 import { InputManager, InputState } from '../../core/InputManager';
+import { ScreenShake } from '../../utils/ScreenShake';
 import { NexariAdaptiveAI } from '../../ai/NexariAdaptiveAI';
 import { RuleMutator, FluxEventType } from './RuleMutator';
 import { RuleMutation } from '../../ai/FluxEngine';
@@ -87,6 +89,7 @@ export class FluxArenaGame {
 
   // Inherited mutations from previous rounds
   private _initialMutations: RuleMutation[] = [];
+  private _screenShake = new ScreenShake();
   private _pushPowerModifier = 1.0;
   private _playerInvisibilityCharges = 0;
   private _hasCenterWeakness = false;
@@ -180,6 +183,18 @@ export class FluxArenaGame {
     // Glow layer
     const glow = new GlowLayer('glow', this._scene);
     glow.intensity = 0.6;
+
+    // Post-processing pipeline
+    const pipeline = new DefaultRenderingPipeline('defaultPipeline', true, this._scene, [this._camera]);
+    pipeline.bloomEnabled = true;
+    pipeline.bloomThreshold = 0.6;
+    pipeline.bloomWeight = 0.4;
+    pipeline.bloomKernel = 64;
+    pipeline.fxaaEnabled = true;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.vignetteEnabled = true;
+    pipeline.imageProcessing.vignetteWeight = 2.0;
+    pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
     // Octagonal platform
     const platformShape: Vector3[] = [];
@@ -527,6 +542,11 @@ export class FluxArenaGame {
     this._checkFallOff('player', ruleReversal);
     this._checkFallOff('ai', ruleReversal);
 
+    const shakeOffset = this._screenShake.update(dt * 1000);
+    if (shakeOffset.length() > 0) {
+      this._camera.position.addInPlace(shakeOffset);
+    }
+
     // Update UI
     this._updateUI();
   }
@@ -576,6 +596,7 @@ export class FluxArenaGame {
     }
 
     this._aiVelocity.addInPlace(direction.scale(power));
+    this._screenShake.trigger(0.1, 150);
 
     // Small self knockback
     this._playerVelocity.addInPlace(direction.scale(-power * 0.15));
@@ -629,6 +650,7 @@ export class FluxArenaGame {
     const dist = distanceXZ(mesh.position, Vector3.Zero());
 
     if (dist > this._arenaRadius + 1) {
+      this._screenShake.trigger(0.2, 300);
       if (who === 'player') {
         if (ruleReversal) {
           this._score.player += 1;
@@ -658,6 +680,7 @@ export class FluxArenaGame {
     const event = this._ruleMutator.getNextEvent();
     logger.info(`Flux Event: ${event.displayName}`);
     this._ai.onFluxEvent();
+    this._screenShake.trigger(0.4, 500);
 
     // Show announcement
     this._showFluxText(`⚡ ${event.displayName} ⚡\n${event.description}`, COLORS.NEXARI_PURPLE);
