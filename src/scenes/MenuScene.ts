@@ -1,18 +1,24 @@
 import { Scene, Color4, Vector3, MeshBuilder, StandardMaterial, Color3, HemisphericLight, ArcRotateCamera, GlowLayer } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock, Button, StackPanel, Rectangle } from '@babylonjs/gui';
 import { Engine } from '../core/Engine';
+import { AudioManager } from '../core/AudioManager';
 import { COLORS } from '../constants/Colors';
 import { hexToRgb } from '../utils/MathUtils';
 import { logger } from '../utils/Logger';
+import { SettingsPanel } from '../ui/SettingsPanel';
+import { cameraIntelligence } from '../ai/CameraIntelligence';
 
 export class MenuScene {
   private _scene: Scene;
   private _engine: Engine;
   private _guiTexture!: AdvancedDynamicTexture;
   private _onStart: (() => void) | null = null;
+  private _audio: AudioManager | null;
+  private _settingsPanel: SettingsPanel | null = null;
 
-  constructor(engine: Engine) {
+  constructor(engine: Engine, audio?: AudioManager) {
     this._engine = engine;
+    this._audio = audio ?? null;
     this._scene = new Scene(this._engine.babylonEngine);
     this._scene.clearColor = new Color4(0.012, 0.004, 0.03, 1);
   }
@@ -143,6 +149,42 @@ export class MenuScene {
       panel.addControl(tutorialBtn);
     }
 
+    // Settings button
+    const settingsBtn = this._createMenuButton('SETTINGS', COLORS.NEXARI_GOLD);
+    settingsBtn.onPointerUpObservable.add(() => {
+      if (this._audio && !this._settingsPanel) {
+        this._settingsPanel = new SettingsPanel(this._scene, this._audio);
+      }
+      if (this._settingsPanel) {
+        this._settingsPanel.show();
+      }
+    });
+    panel.addControl(settingsBtn);
+
+    // Hand control button
+    const handBtn = this._createMenuButton('ENABLE HAND CONTROL', COLORS.NEXARI_PURPLE);
+    handBtn.onPointerUpObservable.add(() => {
+      handBtn.isEnabled = false;
+      const children = handBtn.children;
+      const label = children.length > 0 ? (children[0] as TextBlock) : null;
+      if (label) label.text = 'REQUESTING CAMERA...';
+
+      cameraIntelligence.initialize().then((ok) => {
+        if (ok) {
+          cameraIntelligence.createPreview();
+          if (label) label.text = 'HAND CONTROL ENABLED';
+          handBtn.color = COLORS.SUCCESS;
+          logger.info('MenuScene: hand control enabled');
+        } else {
+          if (label) label.text = 'CAMERA NOT AVAILABLE';
+          handBtn.color = COLORS.DANGER;
+          handBtn.isEnabled = true;
+          logger.info('MenuScene: hand control unavailable');
+        }
+      });
+    });
+    panel.addControl(handBtn);
+
     // Theme explanation
     const themeText = new TextBlock('theme');
     themeText.text = '"Your play style becomes the rules.\nThe competition adapts to YOU."';
@@ -206,6 +248,10 @@ export class MenuScene {
   }
 
   public dispose(): void {
+    if (this._settingsPanel) {
+      this._settingsPanel.dispose();
+      this._settingsPanel = null;
+    }
     this._guiTexture.dispose();
     this._scene.dispose();
   }

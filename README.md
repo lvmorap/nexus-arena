@@ -19,6 +19,8 @@ Earth has been contacted by the Nexari — an alien civilization that refuses wa
 - **A/D or ←/→** — Steer (MirrorRace)
 - **C** — Toggle colorblind mode
 - **H** — Toggle high contrast
+- **Q** — Toggle Depth of Field
+- **F3** — Toggle performance overlay (dev)
 - **?** — Show/hide rule card
 
 **Three Rounds:**
@@ -70,6 +72,25 @@ npm run build
 - **Rule cards** — Press `?` to view current game rules at any time
 - **Mouse-only play** — Game is fully playable without camera mode
 
+## 🌐 Browser Compatibility
+
+| Browser | Status | Notes |
+|---------|--------|-------|
+| Chrome 90+ | ✅ Full support | Primary development target, WebGL2 + Web Audio API |
+| Firefox 90+ | ✅ Full support | WebGL2 via OpenGL backend, Web Audio API supported |
+| Edge 90+ | ✅ Full support | Chromium-based, same support as Chrome |
+
+**Requirements:**
+- WebGL2 capable GPU
+- Web Audio API support
+- ES2022 JavaScript support
+- `font-display: swap` for self-hosted fonts (all modern browsers)
+
+**Known Considerations:**
+- GPUParticleSystem auto-detects support; falls back to CPU particles on unsupported hardware
+- Havok WASM physics requires `vite-plugin-wasm` + `vite-plugin-top-level-await` for bundling
+- `AudioContext` may require a user gesture to resume on all browsers
+
 ## 📄 Credits
 
 - **Engine**: [Babylon.js](https://www.babylonjs.com/)
@@ -85,14 +106,10 @@ MIT
 
 ## 🗺️ ROADMAP — Remaining Features for Future Agents
 
-### Camera Intelligence (Phase 7)
+### Camera Intelligence — TensorFlow.js Upgrade
 
-- [ ] Implement TensorFlow.js + MediaPipe HandPose detection in `CameraIntelligence.ts`
-- [ ] Graceful camera permission request + mouse fallback
-- [ ] Hand gesture integration into DarkShot aiming (index finger = aim, pinch = fire)
-- [ ] Camera preview window (corner overlay, 100x75px)
-- [ ] Auto-fallback to mouse if camera drops below 15fps
-- [ ] "ENABLE HAND CONTROL" menu option
+- [ ] Replace brightest-point tracking with TensorFlow.js + MediaPipe HandPose for accurate finger detection
+- [ ] Map individual finger landmarks (index finger tip = aim, thumb+index pinch = fire)
 
 ### Havok Physics Integration
 
@@ -101,48 +118,6 @@ MIT
 - [ ] PhysicsBody with capsule colliders for FluxArena players
 - [ ] Proper collision callbacks instead of distance checks
 
-### Advanced Flux Events
-
-- [ ] SHIELD_ORB — Grabbable protective orb mesh that spawns during FluxArena
-- [ ] NEXARI_SUMMON — Second AI opponent appears for 10 seconds
-- [ ] PORTAL_ESCAPE — Portals at arena edges, falling through scores 1 pt
-- [ ] COMBO_KNOCK — Bonus for 2 knockoffs within 10 seconds
-
-### Advanced Game Mechanics
-
-- [ ] GRAVUMO Impact Mass system — accumulate mass from pushes, unlock Nexari Blow (gravity impulse throw)
-- [ ] VOID VOLLEY mode — ping-pong variant in MirrorRace tunnel
-- [ ] Judgment Orb in DarkShot — pocketing via central portal resets all scores
-- [ ] D'Anielor's Mirror — force field that duplicates orbs passing through
-- [ ] Ithalokk's Ghost Hands — spectral hands that occasionally push orbs in DarkShot
-- [ ] Ithalokk's Laugh Event — takes control of player capsule for 3 seconds in MirrorRace
-
-### Villain Visual Design
-
-- [ ] D'Anielor: Procedural black crystalline humanoid mesh, star-map head texture, gold dust particles
-- [ ] Xebasthiaan: Translucent capsule with amber interior glow, floating 0.33 units above surfaces
-- [ ] Ithalokk: 4 overlapping translucent mesh copies with noise displacement, phase-shifted
-- [ ] D'Anielor's Eye of the Void icon on HUD during FluxEngine mutation reveals
-- [ ] Xebasthiaan's hologram orbiting FluxArena platform during matches
-- [ ] Dimensional windows in MirrorRace tunnel walls showing parallel universes
-
 ### Audio Enhancement
 
 - [ ] Replace Web Audio synthesis with real audio files (CC0 from freemusicarchive.org/opengameart.org)
-- [ ] Adaptive music crossfade between calm/intense layers per mini-game
-- [ ] Self-hosted fonts in `/public/fonts/` for offline reliability
-
-### Polish & Performance
-
-- [ ] Performance monitoring dev overlay (FPS, particle count, draw calls, physics body count)
-- [ ] Depth of Field toggle ('Q' key)
-- [ ] Chromatic aberration triggered on high-speed collisions (3 frames only)
-- [ ] GPUParticleSystem when available (pool unused particles)
-- [ ] Bundle size optimization (target < 5MB gzipped)
-- [ ] Cross-browser testing: Chrome, Firefox, Edge
-
-### UI Enhancements
-
-- [ ] Settings screen (audio volume slider, graphics quality toggle)
-- [ ] Pause menu (ESC to pause/resume)
-- [ ] Control remapping

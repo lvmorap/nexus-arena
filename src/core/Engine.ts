@@ -1,10 +1,12 @@
 import { Engine as BabylonEngine, Scene } from '@babylonjs/core';
 import { logger } from '../utils/Logger';
+import { performanceOverlay } from '../ui/PerformanceOverlay';
 
 export class Engine {
   private _engine: BabylonEngine;
   private _canvas: HTMLCanvasElement;
   private _currentScene: Scene | null = null;
+  private _paused = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this._canvas = canvas;
@@ -33,8 +35,17 @@ export class Engine {
     return this._currentScene;
   }
 
+  public get isPaused(): boolean {
+    return this._paused;
+  }
+
+  public set paused(v: boolean) {
+    this._paused = v;
+  }
+
   public setScene(scene: Scene): void {
     this._currentScene = scene;
+    performanceOverlay.attach(scene);
   }
 
   public startRenderLoop(): void {

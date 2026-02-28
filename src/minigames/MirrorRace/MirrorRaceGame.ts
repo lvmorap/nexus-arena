@@ -11,6 +11,8 @@ import {
   Mesh,
   GlowLayer,
   DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
+  Observer,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
@@ -20,7 +22,7 @@ import { GhostRecorder, GhostBehavior } from './GhostRecorder';
 import { TrackGenerator, Obstacle } from './TrackGenerator';
 import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
-import { hexToRgb, clamp } from '../../utils/MathUtils';
+import { hexToRgb, clamp, randomRange } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
 import { accessibility } from '../../utils/AccessibilityManager';
 
@@ -95,6 +97,21 @@ export class MirrorRaceGame {
   private _ruleOverlay: TextBlock | null = null;
   private _ruleOverlayVisible = false;
   private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _dofKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  // Void Volley
+  private _volleyOrbs: { mesh: Mesh; z: number; active: boolean }[] = [];
+  private _lastVolleySpawnZ = 0;
+
+  // Dimensional windows in tunnel walls
+  private _dimensionalWindows: Mesh[] = [];
+  private _dimensionalWindowObserver: Observer<Scene> | null = null;
+
+  // Ithalokk's Laugh Event
+  private _laughEventTriggered = false;
+  private _laughEventActive = false;
+  private _laughEventTimer = 0;
+  private _laughTriggerProgress = 0;
 
   private _onComplete: ((score: MirrorRaceScore) => void) | null = null;
 
@@ -189,6 +206,17 @@ export class MirrorRaceGame {
     pipeline.imageProcessing.vignetteWeight = 3.0;
     pipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 1);
 
+    // Depth of Field (toggle with Q)
+    pipeline.depthOfFieldEnabled = false;
+    pipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
+    pipeline.depthOfField.focalLength = 150;
+    pipeline.depthOfField.fStop = 2.8;
+    pipeline.depthOfField.focusDistance = 2000;
+    this._dofKeyHandler = (e: KeyboardEvent): void => {
+      if (e.code === 'KeyQ') pipeline.depthOfFieldEnabled = !pipeline.depthOfFieldEnabled;
+    };
+    window.addEventListener('keydown', this._dofKeyHandler);
+
     // Neon tunnel walls
     const tunnelLeft = this._createTunnelWall('left', -5);
     const tunnelRight = this._createTunnelWall('right', 5);
@@ -235,6 +263,48 @@ export class MirrorRaceGame {
       pLight.intensity = 0.6;
       pLight.range = 20;
     }
+
+    // Dimensional windows in tunnel walls showing parallel universes
+    const windowColors = [
+      new Color3(0.2, 0.8, 0.6),
+      new Color3(0.8, 0.2, 0.4),
+      new Color3(0.3, 0.3, 1.0),
+      new Color3(0.9, 0.7, 0.1),
+      new Color3(0.1, 0.6, 0.9),
+      new Color3(0.7, 0.1, 0.9),
+    ];
+    const windowInterval = 50;
+    const wallXPositions = [-4.8, 4.8];
+    for (const wallX of wallXPositions) {
+      for (let z = -windowInterval; z > -this._trackLength; z -= windowInterval) {
+        const colorIdx =
+          Math.abs(Math.round(z / windowInterval) + (wallX > 0 ? 3 : 0)) % windowColors.length;
+        const win = MeshBuilder.CreateBox(
+          `dimWindow_${wallX}_${z}`,
+          { width: 0.1, height: 1.5, depth: 2 },
+          this._scene,
+        );
+        win.position = new Vector3(wallX, 2, z);
+        const winMat = new StandardMaterial(`dimWindowMat_${wallX}_${z}`, this._scene);
+        winMat.emissiveColor = windowColors[colorIdx];
+        winMat.disableLighting = true;
+        winMat.alpha = 0.5;
+        win.material = winMat;
+        this._dimensionalWindows.push(win);
+      }
+    }
+
+    // Pulse animation for dimensional windows
+    this._dimensionalWindowObserver = this._scene.onBeforeRenderObservable.add(() => {
+      const t = performance.now() * 0.001;
+      for (let i = 0; i < this._dimensionalWindows.length; i++) {
+        const win = this._dimensionalWindows[i];
+        const mat = win.material as StandardMaterial;
+        if (mat) {
+          mat.alpha = 0.4 + Math.sin(t * 0.8 + i * 0.5) * 0.1;
+        }
+      }
+    });
   }
 
   private _createTunnelWall(side: string, xPos: number): Mesh {
@@ -470,11 +540,13 @@ export class MirrorRaceGame {
   private _startRace(): void {
     this._isRunning = true;
     this._matchStartTime = performance.now();
+    this._laughTriggerProgress = randomRange(0.3, 0.5);
     logger.info('MirrorRace started!');
   }
 
   private _update(dt: number): void {
     if (this._countdownActive || !this._isRunning) return;
+    if (this._engine.isPaused) return;
 
     const elapsed = performance.now() - this._matchStartTime;
 
@@ -513,6 +585,12 @@ export class MirrorRaceGame {
     // Check obstacle collisions
     this._checkObstacles();
 
+    // Void Volley
+    this._updateVolleyOrbs(dt);
+
+    // Ithalokk's Laugh
+    this._updateLaughEvent(dt);
+
     // Check finish
     this._checkFinish(elapsed);
 
@@ -532,11 +610,18 @@ export class MirrorRaceGame {
     dt: number
   ): void {
     const laneSpeed = 12;
-    if (input.moveLeft) {
-      this._playerX -= laneSpeed * dt;
-    }
-    if (input.moveRight) {
-      this._playerX += laneSpeed * dt;
+
+    // Ithalokk's Laugh: override controls with random oscillation
+    if (this._laughEventActive) {
+      const oscillation = Math.sin(performance.now() * 0.008) * laneSpeed;
+      this._playerX += oscillation * dt;
+    } else {
+      if (input.moveLeft) {
+        this._playerX -= laneSpeed * dt;
+      }
+      if (input.moveRight) {
+        this._playerX += laneSpeed * dt;
+      }
     }
     // Clamp to track bounds
     this._playerX = clamp(this._playerX, -4, 4);
@@ -655,6 +740,95 @@ export class MirrorRaceGame {
     }
   }
 
+  private _spawnVolleyOrb(): void {
+    const gold = hexToRgb(COLORS.NEXARI_GOLD);
+    const orb = MeshBuilder.CreateSphere(
+      `volleyOrb_${this._volleyOrbs.length}`,
+      { diameter: 1.2, segments: 12 },
+      this._scene,
+    );
+    const orbZ = this._playerZ - 60;
+    orb.position = new Vector3(randomRange(-3, 3), 1.2, orbZ);
+    const mat = new StandardMaterial(`volleyOrbMat_${this._volleyOrbs.length}`, this._scene);
+    mat.emissiveColor = new Color3(gold.r, gold.g, gold.b);
+    mat.diffuseColor = new Color3(gold.r * 0.5, gold.g * 0.5, gold.b * 0.5);
+    mat.alpha = 0.9;
+    orb.material = mat;
+    this._volleyOrbs.push({ mesh: orb, z: orbZ, active: true });
+    this._showAnnouncement('VOID VOLLEY!', COLORS.NEXARI_GOLD);
+    logger.info('MirrorRace: Volley orb spawned');
+  }
+
+  private _updateVolleyOrbs(dt: number): void {
+    const distanceTraveled = Math.abs(this._playerZ);
+    if (distanceTraveled - this._lastVolleySpawnZ >= 100 && distanceTraveled > 50) {
+      this._lastVolleySpawnZ = distanceTraveled;
+      this._spawnVolleyOrb();
+    }
+
+    for (const vo of this._volleyOrbs) {
+      if (!vo.active) continue;
+
+      // Move toward player
+      vo.z += 20 * dt;
+      vo.mesh.position.z = vo.z;
+      vo.mesh.rotation.y += 3 * dt;
+
+      // Check collision with player
+      const dx = Math.abs(this._playerX - vo.mesh.position.x);
+      const dz = Math.abs(this._playerZ - vo.z);
+      if (dz < 2 && dx < 2) {
+        vo.active = false;
+        vo.mesh.setEnabled(false);
+        this._score.player += 2;
+        this._showAnnouncement('VOLLEY RETURN! +2', COLORS.SUCCESS);
+        this._screenShake.trigger(0.15, 200);
+        logger.info('MirrorRace: Volley orb intercepted');
+        continue;
+      }
+
+      // Missed — orb passed player
+      if (vo.z > this._playerZ + 5) {
+        vo.active = false;
+        vo.mesh.setEnabled(false);
+        this._score.ai += 1;
+        this._showAnnouncement('VOLLEY MISSED! Ghost +1', COLORS.DANGER);
+        logger.info('MirrorRace: Volley orb missed');
+      }
+    }
+  }
+
+  private _updateLaughEvent(dt: number): void {
+    if (this._laughEventTriggered && !this._laughEventActive) return;
+
+    const progress = Math.abs(this._playerZ) / this._trackLength;
+
+    if (
+      !this._laughEventTriggered &&
+      !this._laughEventActive &&
+      this._laughTriggerProgress > 0 &&
+      progress >= this._laughTriggerProgress
+    ) {
+      this._laughEventActive = true;
+      this._laughEventTriggered = true;
+      this._laughEventTimer = 3;
+      this._showAnnouncement("ITHALOKK'S LAUGH — CONTROLS SEIZED!", COLORS.NEXARI_PURPLE);
+      this._commentaryText.text = '"YOU THOUGHT YOU WERE IN CONTROL? ADORABLE." — ITHALOKK';
+      this._commentaryText.alpha = 0.8;
+      logger.info('MirrorRace: Ithalokk Laugh event triggered');
+    }
+
+    if (this._laughEventActive) {
+      this._laughEventTimer -= dt;
+      if (this._laughEventTimer <= 0) {
+        this._laughEventActive = false;
+        this._showAnnouncement('CONTROL RESTORED', COLORS.SUCCESS);
+        this._commentaryText.alpha = 0;
+        logger.info('MirrorRace: Ithalokk Laugh event ended');
+      }
+    }
+  }
+
   private _checkFinish(elapsed: number): void {
     if (!this._score.playerFinished && this._playerZ <= -this._trackLength) {
       this._score.playerFinished = true;
@@ -768,7 +942,20 @@ export class MirrorRaceGame {
       clearTimeout(timeout);
     }
     this._activeTimeouts = [];
+    for (const vo of this._volleyOrbs) {
+      if (!vo.mesh.isDisposed()) vo.mesh.dispose();
+    }
+    this._volleyOrbs = [];
+    for (const win of this._dimensionalWindows) {
+      if (!win.isDisposed()) win.dispose();
+    }
+    this._dimensionalWindows = [];
+    if (this._dimensionalWindowObserver) {
+      this._scene.onBeforeRenderObservable.remove(this._dimensionalWindowObserver);
+      this._dimensionalWindowObserver = null;
+    }
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
+    if (this._dofKeyHandler) window.removeEventListener('keydown', this._dofKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }

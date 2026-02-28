@@ -9,6 +9,14 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     sourcemap: true,
+    chunkSizeWarningLimit: 5000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          babylon: ['@babylonjs/core', '@babylonjs/gui', '@babylonjs/loaders'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,

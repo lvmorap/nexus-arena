@@ -3,6 +3,7 @@ import earcut from 'earcut';
 (window as unknown as Record<string, unknown>).earcut = earcut;
 
 import { Engine } from './core/Engine';
+import { Scene } from '@babylonjs/core';
 import { GameStateMachine } from './core/GameStateMachine';
 import { InputManager } from './core/InputManager';
 import { AudioManager } from './core/AudioManager';
@@ -19,6 +20,9 @@ import { MirrorRaceGame, MirrorRaceScore } from './minigames/MirrorRace/MirrorRa
 import { GhostRecorder } from './minigames/MirrorRace/GhostRecorder';
 import { logger } from './utils/Logger';
 import { accessibility } from './utils/AccessibilityManager';
+import { PauseOverlay } from './ui/PauseOverlay';
+import { SettingsPanel } from './ui/SettingsPanel';
+import { performanceOverlay } from './ui/PerformanceOverlay';
 
 class NexusArena {
   private _engine: Engine;
@@ -43,6 +47,10 @@ class NexusArena {
   private _fluxArenaGame: FluxArenaGame | null = null;
   private _mirrorRaceGame: MirrorRaceGame | null = null;
   private _resultsScene: ResultsScene | null = null;
+
+  // Pause overlay for gameplay scenes
+  private _pauseOverlay: PauseOverlay | null = null;
+  private _pauseSettings: SettingsPanel | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this._engine = new Engine(canvas);
@@ -86,7 +94,7 @@ class NexusArena {
 
     this._stateMachine.transitionTo('MENU');
     this._audio.playMusic('MENU_AMBIENT');
-    this._menuScene = new MenuScene(this._engine);
+    this._menuScene = new MenuScene(this._engine, this._audio);
     this._menuScene.setup(
       () => {
         this._showIntro();
@@ -135,6 +143,7 @@ class NexusArena {
       this._onDarkShotComplete(score);
     });
     this._engine.setScene(this._darkShotGame.scene);
+    this._createPauseOverlay(this._darkShotGame.scene);
   }
 
   private _onDarkShotComplete(score: DarkShotScore): void {
@@ -190,6 +199,7 @@ class NexusArena {
       this._onFluxArenaComplete(score);
     });
     this._engine.setScene(this._fluxArenaGame.scene);
+    this._createPauseOverlay(this._fluxArenaGame.scene);
   }
 
   private _onFluxArenaComplete(score: FluxArenaScore): void {
@@ -242,6 +252,7 @@ class NexusArena {
       this._onMirrorRaceComplete(score);
     });
     this._engine.setScene(this._mirrorRaceGame.scene);
+    this._createPauseOverlay(this._mirrorRaceGame.scene);
   }
 
   private _onMirrorRaceComplete(score: MirrorRaceScore): void {
@@ -290,7 +301,46 @@ class NexusArena {
 
   /* ---- CLEANUP ---- */
 
+  private _createPauseOverlay(scene: Scene): void {
+    this._pauseOverlay = new PauseOverlay(
+      scene,
+      () => {
+        this._engine.paused = false;
+        if (this._pauseSettings) {
+          this._pauseSettings.hide();
+        }
+      },
+      () => {
+        this._engine.paused = true;
+      },
+      () => {
+        if (!this._pauseSettings) {
+          this._pauseSettings = new SettingsPanel(scene, this._audio);
+        }
+        this._pauseSettings.show();
+      },
+      () => {
+        this._engine.paused = false;
+        this._showMenu();
+      },
+    );
+  }
+
+  private _disposePauseOverlay(): void {
+    if (this._pauseSettings) {
+      this._pauseSettings.dispose();
+      this._pauseSettings = null;
+    }
+    if (this._pauseOverlay) {
+      this._pauseOverlay.dispose();
+      this._pauseOverlay = null;
+    }
+    this._engine.paused = false;
+  }
+
   private _disposeCurrentScenes(): void {
+    this._disposePauseOverlay();
+    performanceOverlay.dispose();
     if (this._bootScene) {
       this._bootScene.dispose();
       this._bootScene = null;
