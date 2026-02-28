@@ -6,6 +6,7 @@ import { COLORS } from '../constants/Colors';
 import { hexToRgb } from '../utils/MathUtils';
 import { logger } from '../utils/Logger';
 import { SettingsPanel } from '../ui/SettingsPanel';
+import { cameraIntelligence } from '../ai/CameraIntelligence';
 
 export class MenuScene {
   private _scene: Scene;
@@ -159,6 +160,30 @@ export class MenuScene {
       }
     });
     panel.addControl(settingsBtn);
+
+    // Hand control button
+    const handBtn = this._createMenuButton('ENABLE HAND CONTROL', COLORS.NEXARI_PURPLE);
+    handBtn.onPointerUpObservable.add(() => {
+      handBtn.isEnabled = false;
+      const children = handBtn.children;
+      const label = children.length > 0 ? (children[0] as TextBlock) : null;
+      if (label) label.text = 'REQUESTING CAMERA...';
+
+      cameraIntelligence.initialize().then((ok) => {
+        if (ok) {
+          cameraIntelligence.createPreview();
+          if (label) label.text = 'HAND CONTROL ENABLED';
+          handBtn.color = COLORS.SUCCESS;
+          logger.info('MenuScene: hand control enabled');
+        } else {
+          if (label) label.text = 'CAMERA NOT AVAILABLE';
+          handBtn.color = COLORS.DANGER;
+          handBtn.isEnabled = true;
+          logger.info('MenuScene: hand control unavailable');
+        }
+      });
+    });
+    panel.addControl(handBtn);
 
     // Theme explanation
     const themeText = new TextBlock('theme');

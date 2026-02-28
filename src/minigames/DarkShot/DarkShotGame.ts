@@ -22,6 +22,7 @@ import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, randomRange, clamp } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
 import { accessibility } from '../../utils/AccessibilityManager';
+import { cameraIntelligence } from '../../ai/CameraIntelligence';
 
 export interface DarkShotScore {
   player: number;
@@ -131,6 +132,9 @@ export class DarkShotGame {
   // Ithalokk's Ghost Hands
   private _ghostHandTimer = 0;
   private _ghostHandInterval = 10;
+
+  // Camera hand-control debounce
+  private _handFireDebounce = false;
 
   constructor(engine: Engine, input: InputManager) {
     this._engine = engine;
@@ -699,6 +703,35 @@ export class DarkShotGame {
     }
 
     this._updateSquashStretch();
+
+    // Camera hand-control integration
+    if (
+      cameraIntelligence.isActive &&
+      this._phase === 'aiming' &&
+      this._currentTurn === 'player'
+    ) {
+      const handState = cameraIntelligence.getHandState();
+      if (handState) {
+        const cueX = this._cueOrb.mesh.position.x;
+        const cueZ = this._cueOrb.mesh.position.z;
+        this._aimStartX = cueX;
+        this._aimStartZ = cueZ;
+        this._aimEndX = cueX + Math.sin(handState.aimAngle) * 5;
+        this._aimEndZ = cueZ + Math.cos(handState.aimAngle) * 5;
+        this._updateAimLine();
+
+        if (handState.isFiring && !this._handFireDebounce) {
+          this._handFireDebounce = true;
+          const power = clamp(handState.aimPower, 0.1, 1) * this._cfg.MAX_SHOT_POWER;
+          const dir = new Vector3(Math.sin(handState.aimAngle), 0, Math.cos(handState.aimAngle));
+          this._shootCue(dir, power);
+          this._clearAimLine();
+        }
+        if (!handState.isFiring) {
+          this._handFireDebounce = false;
+        }
+      }
+    }
 
     if (!accessibility.isReducedMotion) {
       const shakeOffset = this._screenShake.update(dt * 1000);
