@@ -11,6 +11,7 @@ import {
   Mesh,
   GlowLayer,
   DefaultRenderingPipeline,
+  Observer,
 } from '@babylonjs/core';
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui';
 import { Engine } from '../../core/Engine';
@@ -102,6 +103,7 @@ export class MirrorRaceGame {
 
   // Dimensional windows in tunnel walls
   private _dimensionalWindows: Mesh[] = [];
+  private _dimensionalWindowObserver: Observer<Scene> | null = null;
 
   // Ithalokk's Laugh Event
   private _laughEventTriggered = false;
@@ -280,7 +282,7 @@ export class MirrorRaceGame {
     }
 
     // Pulse animation for dimensional windows
-    this._scene.registerBeforeRender(() => {
+    this._dimensionalWindowObserver = this._scene.onBeforeRenderObservable.add(() => {
       const t = performance.now() * 0.001;
       for (let i = 0; i < this._dimensionalWindows.length; i++) {
         const win = this._dimensionalWindows[i];
@@ -935,6 +937,10 @@ export class MirrorRaceGame {
       if (!win.isDisposed()) win.dispose();
     }
     this._dimensionalWindows = [];
+    if (this._dimensionalWindowObserver) {
+      this._scene.onBeforeRenderObservable.remove(this._dimensionalWindowObserver);
+      this._dimensionalWindowObserver = null;
+    }
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();

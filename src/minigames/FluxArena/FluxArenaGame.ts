@@ -52,6 +52,7 @@ export class FluxArenaGame {
   private _platform!: Mesh;
   private _playerMesh!: Mesh;
   private _aiMesh!: Mesh;
+  private _xebHologram: import('@babylonjs/core').TransformNode | null = null;
 
   // Game state
   private _score: FluxArenaScore = {
@@ -297,7 +298,7 @@ export class FluxArenaGame {
     }
 
     // Xebasthiaan's hologram orbiting the platform
-    VillainMeshFactory.createXebasthiaanHologram(
+    this._xebHologram = VillainMeshFactory.createXebasthiaanHologram(
       this._scene,
       Vector3.Zero(),
       this._arenaRadius + 3,
@@ -1054,6 +1055,10 @@ export class FluxArenaGame {
     if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     if (this._shieldOrbMesh && !this._shieldOrbMesh.isDisposed()) this._shieldOrbMesh.dispose();
     if (this._summonMesh && !this._summonMesh.isDisposed()) this._summonMesh.dispose();
+    if (this._xebHologram) {
+      this._xebHologram.dispose();
+      this._xebHologram = null;
+    }
     for (const m of this._portalEscapeMeshes) {
       if (!m.isDisposed()) m.dispose();
     }
