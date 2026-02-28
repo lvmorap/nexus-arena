@@ -140,6 +140,7 @@ export class ResultsScene {
     // Stats
     const statsText = new TextBlock('stats');
     const statsLines: string[] = [];
+    statsLines.push(`RULES TRIGGERED: ${mutations.length}`);
     if (score.knockoffs > 0 || score.selfKOs > 0) {
       statsLines.push(`Knockoffs: ${score.knockoffs}  |  Self-KOs: ${score.selfKOs}`);
     }
@@ -173,14 +174,40 @@ export class ResultsScene {
 
       for (const mut of mutations) {
         const mutText = new TextBlock(`mut_${mut.id}`);
-        mutText.text = `${mut.displayName} — ${mut.description}`;
-        mutText.color = COLORS.NEUTRAL;
+        const favorIcon = mut.favoredPlayer === 'PLAYER' ? '▲' : mut.favoredPlayer === 'AI' ? '▼' : '◆';
+        mutText.text = `${favorIcon} ${mut.displayName} — ${mut.description}`;
+        mutText.color = mut.favoredPlayer === 'PLAYER' ? COLORS.SUCCESS
+          : mut.favoredPlayer === 'AI' ? COLORS.DANGER
+          : COLORS.NEUTRAL;
         mutText.fontSize = 14;
         mutText.fontFamily = 'Rajdhani, sans-serif';
         mutText.height = '30px';
         mutText.alpha = 0.8;
         panel.addControl(mutText);
       }
+
+      // Reflective debrief
+      const debriefSpacer = new Rectangle('debriefSpacer');
+      debriefSpacer.height = '10px';
+      debriefSpacer.thickness = 0;
+      panel.addControl(debriefSpacer);
+
+      const playerFavorCount = mutations.filter((m) => m.favoredPlayer === 'PLAYER').length;
+      const aiFavorCount = mutations.filter((m) => m.favoredPlayer === 'AI').length;
+      const debriefText = new TextBlock('debrief');
+      if (aiFavorCount > playerFavorCount) {
+        debriefText.text = 'Your patterns were exploited. The arena adapted against you.';
+      } else if (playerFavorCount > aiFavorCount) {
+        debriefText.text = 'Your skill unlocked advantages. The arena rewarded your mastery.';
+      } else {
+        debriefText.text = 'A balanced showing. The arena could not predict you.';
+      }
+      debriefText.color = COLORS.NEXARI_GOLD;
+      debriefText.fontSize = 15;
+      debriefText.fontFamily = 'Rajdhani, sans-serif';
+      debriefText.height = '35px';
+      debriefText.alpha = 0.9;
+      panel.addControl(debriefText);
     }
 
     // Spacer

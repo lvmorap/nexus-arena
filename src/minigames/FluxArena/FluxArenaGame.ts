@@ -348,6 +348,33 @@ export class FluxArenaGame {
     this._countdownActive = true;
     this._countdownStartTime = performance.now();
 
+    // Show inherited mutations from previous rounds
+    if (this._initialMutations.length > 0) {
+      const mutText = new TextBlock('inheritedMuts');
+      const mutNames = this._initialMutations.map((m) => `[${m.displayName}]`).join('  ');
+      mutText.text = `ACTIVE RULES: ${mutNames}`;
+      mutText.color = COLORS.NEXARI_PURPLE;
+      mutText.fontSize = 16;
+      mutText.fontFamily = 'Rajdhani, sans-serif';
+      mutText.top = '15%';
+      mutText.alpha = 0.9;
+      this._guiTexture.addControl(mutText);
+
+      // Fade out after 5 seconds
+      setTimeout(() => {
+        let a = 0.9;
+        const fade = setInterval(() => {
+          a -= 0.03;
+          if (a <= 0) {
+            mutText.dispose();
+            clearInterval(fade);
+          } else {
+            mutText.alpha = a;
+          }
+        }, 50);
+      }, 5000);
+    }
+
     const countdownText = new TextBlock('countdown');
     countdownText.text = '3';
     countdownText.color = COLORS.NEXARI_GOLD;
