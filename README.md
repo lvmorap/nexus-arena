@@ -1130,19 +1130,335 @@ Do not skip phases. Confirm each phase before proceeding.
 
 ---
 
-## ━━━ SECTION 22 — INTEGRATION WITH PREVIOUS GAMES ━━━
+## ━━━ SECTION 22 — THE THREE LORDS OF COSMIC CHAOS ━━━
+### *The Villain Lore: D'Anielor, Xebasthiaan & Ithalokk*
 
-The two previous games in this universe are canonical:
-- **BLIND BREAK** (`lvmorap.github.io/BLIND-BREAK/`): The fog-of-war billiards mechanic
-  is the direct ancestor of **DarkShot**. NEXUS ARENA should reference it in the narrative:
-  "The Nexari first observed humans playing blind pool in 2024. They found the concept
-  of 'chosen darkness' fascinating."
-- **RuleBreak Arena** (`lvmorap.github.io/RuleBreak-Arena/`): The hybrid mode system and
-  Flux Events in FluxArena directly evolve from RuleBreak-Arena's mode-switching mechanic.
-  Reference: "The Arena adapts. It learned this from watching humans play."
+> This section defines the complete narrative canon, villain backstory, scenario descriptions,
+> and sport adaptations that drive NEXUS ARENA's post-apocalyptic alien universe.
+> All narrative content here is considered **source of truth** for writers, artists, and developers.
 
-**Optional Easter Egg**: In the Credits or Results screen, list both games as
-"Previous Human Competitions Observed by the Nexari" with links.
+---
+
+### 22.1 — WHO ARE THE NEXARI JUDGES?
+
+The Nexus Arena is not hosted by the Nexari civilization as a whole.
+It is hosted by three specific beings — ancient, bored, and magnificent in their cruelty —
+who operate with the Nexari's implicit tolerance because they always deliver results.
+They are known across 47 dead civilizations simply as **The Three**.
+
+---
+
+#### D'ANIELOR KASTHELLANOX
+
+The oldest of the Three. A being of crystallized dark matter, his body resembles a formal suit
+assembled from fragments of destroyed planets. His head is a black sphere that projects false
+constellations — stellar maps of civilizations he extinguished for sport.
+
+D'Anielor is the **Strategist**. He does not destroy through violence; he destroys through
+boredom-induced design. He architects impossible games for inferior civilizations and applauds
+their failure with genuine, cold appreciation for the elegance of collapse.
+
+His relic is the **Eye of the Void** — a floating orb made from the collapsed core of a dwarf
+star, which he uses as a holographic projector during his "observation tournaments."
+
+**Visual Design Suggestion:**
+- Body: black crystalline humanoid, angular, formal
+- Head: sphere projecting faint star maps that correspond to extinct civilizations
+- Voice: extremely measured, calm, with a subsonic vibration that rattles glass
+- Signature color: `#030308` void-black with `#ffd700` gold accents
+- Never moves quickly. Never raises his voice. The most terrifying one.
+
+**Role in the Arena:**
+D'Anielor designed the rules of all three mini-games. Every Flux Law that fires
+during your playthrough was authored by him based on pattern-data he collected from
+humanity's own entertainment archives. He knows what you'll do before you do it.
+In the HUD, his "Eye of the Void" icon appears whenever the FluxEngine reads your performance
+and mutates the next round's rules.
+
+---
+
+#### XEBASTHIAAN DU'QAE
+
+The Judge. A being of ionized plasma encapsulated in a translucent exoskeleton of alien crystal
+that glows amber and scarlet. His voice is simultaneously sound and an electromagnetic field —
+within 10 meters, it disables human technology and causes biological resonance in living tissue.
+
+Xebasthiaan developed a philosophical obsession: **measuring species potential at maximum
+pressure**. He is not sadistic by pleasure, but by scientific conviction. He believes only in
+defeat does a species reveal its true nature.
+
+His body never touches surfaces. He floats exactly 33 centimeters above any floor — as if the
+universe itself does not merit contact.
+
+**Visual Design Suggestion:**
+- Body: translucent exoskeleton, amber-to-scarlet gradient, plasma visible inside
+- Movement: always floating, rotating slowly on vertical axis when evaluating a player
+- Voice: two simultaneous tones — one audible, one felt as vibration
+- Signature color: `#ff8800` amber — `#ff2244` scarlet
+- Reacts to player performance with micro-expressions only visible at close distance
+
+**Role in the Arena:**
+Xebasthiaan is the announcer and referee visible in the transition scenes.
+He reads the player's score breakdown during TransitionScene with the data-flow animation.
+His hologram hovers above the arena and rotates to face the current leader.
+During **GRAVUMO** (FluxArena), a hologram of Xebasthiaan orbits the octagonal platform,
+announcing each Gravity Event with a voice that makes the platform vibrate.
+His "scoring rubric" appears on the Results Screen with the cold detachment of a scientist
+filing a report on an extinct insect.
+
+---
+
+#### ITHALOKK KAPAS'SOX
+
+The most chaotic of the Three. Ithalokk is a multidimensional being — his body exists on four
+simultaneous planes, making him appear as four overlapping versions of himself, slightly
+phase-shifted, like a cosmic rendering error.
+
+He is the **Architect of Creative Chaos**: he designs arenas, objects, and environments.
+Having consumed so many civilizations, his skin is literally a mosaic of impossible materials —
+asteroid metal, gas-planet crystal, membranes of extinct organisms.
+He collects extinct sports from dead races the way others collect coins.
+
+It was Ithalokk who first noticed humanity's billiards-in-the-dark experiments, sumo contests,
+and ping pong matches in intercepted entertainment signals from Earth in 2024.
+He was the first to say: *"These creatures are already training for us."*
+
+**Visual Design Suggestion:**
+- Body: four overlapping translucent versions, each slightly offset in position and phase
+- When standing still, appears to flicker; when moving fast, only one version is visible
+- Carries a small cube of absolute darkness he calls "The Collection" — contains absorbed sports
+- Signature color: `#9b00ff` purple and `#00f5ff` alien cyan shifting between states
+- Laughs at inappropriate moments. The only one of the Three who seems to enjoy himself.
+
+**Role in the Arena:**
+Ithalokk's "touch" is felt in every arena as a random element.
+In **DarkShot**: his spectral hands (visible only as gas distortions) occasionally push orbs.
+In **GRAVUMO**: he controls the Gravity Nuclei in real time; Flux Events are his improv.
+In **VOID VOLLEY** / **Mirror Race**: his "Laugh Event" takes control of the player's
+capsule for 3 seconds, forcing a random maneuver with the subtitle: *"Let me show you how it's played."*
+
+---
+
+### 22.2 — THE WORLD: POST-APOCALYPTIC SCENARIO
+
+#### Timeline
+```
+10,000 years ago   — The Three serve as Nexari diplomatic envoys. Begin "improving" games
+                     by modifying rules mid-tournament without telling participants.
+                     The Nexari tolerate them because they always win.
+
+47 years ago       — Ithalokk intercepts humanity's entertainment signals. BLIND BREAK
+                     experimental game footage triggers the collection protocol.
+                     D'Anielor begins designing Earth's trial. Xebasthiaan begins scoring criteria.
+
+2 years ago        — Nexari probes enter the solar system. Mars is tested as the venue.
+                     Mars is deemed "insufficient." Mars ceases to exist.
+                     Astronomers notice. Governments are told "solar event."
+
+Day 0 (Game start) — 3.7 billion humans receive the same dream simultaneously:
+                     Three silhouettes above the burning remains of Mars.
+                     Xebasthiaan's voice in 7,000 languages:
+                     "Participation is mandatory. Defeat is relocation.
+                      Victory is... interesting."
+```
+
+#### The Three Arenas (Scenario Design)
+
+**ARENA 1 — THE VOID BILLIARD (DarkShot)**
+The International Space Station, reconfigured. The Destiny module was expanded to a
+200-meter circular chamber. Walls are plasma-crystal showing real-time space outside.
+The billiard table floats at center, made from asteroid metal — pockets replaced by
+**dimensional rifts** glowing in D'Anielor's magenta.
+
+The fog-of-war is literal: cryogenic gas released by Ithalokk that freezes visible light,
+revealing only what moving orbs illuminate.
+
+From Earth's surface, it appears as a new star in the night sky. A star that pulses.
+
+*Unique Objects:*
+- **The Judgment Orb**: if pocketed via the central portal, all scores reset. Trap or masterstroke.
+- **D'Anielor's Mirror**: a force field that duplicates any orb passing through it.
+  Pocket through the mirror = 5 points. But opponent's orbs double too.
+- **Ghost Hands**: Ithalokk's spectral hands occasionally push orbs — unpredictable by both player and AI.
+
+**ARENA 2 — THE GRAVITY COLOSSEUM (FluxArena / GRAVUMO)**
+Tokyo Olympic Stadium, physically levitated into geostationary orbit above Japan.
+Citizens below see it glow green every time a match begins. The interior has been replaced by
+a **nanoceramite octagonal platform** floating 50 meters above the original stadium floor.
+The original stands are still intact — filled with silent holographic spectators from
+47 extinct civilizations, all observing and taking notes.
+
+Gravity is not constant. Four **Gravity Nuclei** — black metal cubes the size of marbles —
+are positioned at each corner, controllable by Ithalokk. They create zones of hypergravity
+or zero-gravity in specific platform sectors in real time.
+
+The GRAVUMO mechanic: players accumulate **Impact Mass** from successful pushes.
+At threshold, they unlock the **Nexari Blow** — a localized gravity impulse that executes
+a true 3D *yorikiri* throw, projecting the opponent in any tridimensional direction.
+
+*Gravity Events (Flux Events renamed):*
+```
+"XEBASTHIAAN'S JUDGMENT"  → Platform tilts 30°; all physics recalibrate
+"D'ANIELOR'S GAZE"        → Central zero-gravity zone; both players float
+"ITHALOKK'S TOUCH"        → Floor becomes semi-transparent; the void is visible beneath
+"NEXARI COURT RULING"      → Falling OFF the arena SCORES for 10 seconds (rule reversal)
+"THE COLLECTION"           → Ithalokk releases an extinct sport mechanic: random per match
+```
+
+**ARENA 3 — THE FRACTAL TUNNEL (Mirror Race / VOID VOLLEY)**
+The Channel Tunnel under the English Channel, "expanded" by a Nexari dimensional portal
+into an infinite corridor existing across multiple dimensions simultaneously.
+From inside, the walls show fragments of parallel universes — alternate Earths where humanity
+made different choices. Some of those Earths survived. Most did not.
+
+The VOID VOLLEY mechanic: players control **Impulse Capsules** through the tunnel.
+An **Energy Orb** bounces between both halves. Missing an interception = 1 point for the opponent.
+
+*Unique Events:*
+- **Dimensional Windows**: openings in tunnel walls to parallel universes. Pass through one,
+  the Orb teleports to a random position.
+- **D'Anielor's Laugh**: AI takes control of your capsule for 3 seconds with subtitle commentary.
+- **Ithalokk's Memory Field**: time slows to 50%, past movements of both players rendered
+  as light trails — see your own mistakes as visible geometry.
+- **VOID VOLLEY DEUCE**: when scores are tied, both players lose visibility of their rear
+  tunnel half — activating the BLIND BREAK heritage mechanic in full force.
+
+---
+
+### 22.3 — SPORT ADAPTATIONS: SUMO & PING PONG
+
+#### SUMO → GRAVUMO (FluxArena)
+
+| Original Sumo Element | Alien Adaptation in GRAVUMO |
+|---|---|
+| Circular dohyō ring | Octagonal nanoceramite platform; falling = floating in void (visible through floor) |
+| Mawashi belt | Gravity Exoskeleton: grants 3 gravity pulses per round |
+| Gyōji referee | Hologram of Xebasthiaan Du'Qae orbiting the platform; announces rules |
+| Exit-ring = loss | Base rule + Gravity Events change what "falling" means each round |
+| Tachi-ai starting position | Players materialize from Nexari teleport capsules with magenta flash |
+| Human audience | Silent holographic spectators from 47 extinct civilizations |
+| Ritual pre-match ceremony | D'Anielor projects his star map of past Earth victories (zero) before match begins |
+
+**New mechanic (not in original FluxArena):**
+The **Nexari Blow** — Impact Mass threshold unlocks a localized gravity impulse.
+True 3D *yorikiri*: opponent is launched in any direction, including upward into the void.
+
+#### PING PONG → VOID VOLLEY (Mirror Race / Tunnel)
+
+| Original Ping Pong Element | Alien Adaptation in VOID VOLLEY |
+|---|---|
+| Rectangular table | Infinite dimensional tunnel; center axis = the "table" |
+| Paddle | Impulse Capsule; your body is the interception instrument |
+| Ball | Nexari Energy Orb; accelerates as cumulative score rises |
+| Net | Plasma Divider; can shift position along tunnel axis per Flux Event |
+| Point: ball reaches your side | Point: Orb passes your position unintercepted |
+| Ball spin | Dimensional spin: Orb deflects at impossible angles when Ithalokk "touches" the match |
+| Deuce / advantage | CAOS DUAL: tied score triggers BLIND BREAK darkness mechanic in tunnel rear half |
+| Serving | Xebasthiaan Du'Qae initiates each exchange from outside the tunnel with an electromagnetic pulse |
+
+---
+
+### 22.4 — NARRATIVE INTEGRATION WITH PREVIOUS GAMES
+
+The two canonical predecessor games were **observed by The Three** before designing the trial:
+
+**BLIND BREAK** (`lvmorap.github.io/BLIND-BREAK/`)
+Classified by Ithalokk as *"Human Experiment #7,441-B: Voluntary Information Deprivation."*
+He found humanity's willingness to play in darkness for greater reward philosophically
+compelling. His notes in the Nexari archive read:
+*"They choose blindness. They reward boldness. This species is already thinking like us."*
+The fog-of-war system in DarkShot is a direct evolution of BLIND BREAK's darkness mechanic,
+now volumetric and three-dimensional. The DarkShot arena narrative references it explicitly:
+*"The Nexari first observed humans playing blind pool in 2024. The concept of chosen darkness
+fascinated them. They decided it deserved a grander stage."*
+
+**RULEBREAK ARENA / FUSIONBOTS ARENA** (`lvmorap.github.io/RuleBreak-Arena/`)
+Classified by D'Anielor as *"Human Experiment #7,441-C: Voluntary Rule Dissolution."*
+The discovery that humans willingly played games where rules changed every 60 seconds
+confirmed the hypothesis: humanity was uniquely suited for the Nexus Arena trial format.
+D'Anielor's notes: *"They don't just endure rule changes. They enjoy them. Remarkable."*
+The FluxArena's Flux Events and GRAVUMO's Gravity Events are evolutionary descendants of
+RuleBreak Arena's hybrid mode system. The FUSION TOTAL final mode inspired the
+**NEXARI COURT RULING** event, where falling off the platform briefly becomes a scoring mechanic.
+
+**Developer Implementation Note:**
+In the Results Screen, under the stats panel, include a section titled:
+```
+"PREVIOUS HUMAN COMPETITIONS OBSERVED BY THE NEXARI:"
+→ Experiment #7,441-B: Blind Pool in Darkness   [BLIND BREAK]
+→ Experiment #7,441-C: Voluntary Rule Dissolution [FUSIONBOTS ARENA]
+```
+Link both with anchor tags to their GitHub Pages deployments.
+Render them in the dim terminal-green style of the IntroScene typewriter.
+
+---
+
+### 22.5 — DIALOGUE SAMPLES FOR IN-GAME USE
+
+```typescript
+// D'Anielor — during FluxEngine mutation reveal (cold, measured)
+"YOUR PATTERN IS NOTED. THE ARENA HAS BEEN INFORMED."
+"PREDICTABILITY IS A FORM OF SURRENDER."
+"SEVEN THOUSAND SPECIES HAVE STOOD WHERE YOU STAND. I ENJOYED WATCHING THEM ALL."
+
+// Xebasthiaan — during match (evaluative, clinical)
+"PERFORMANCE: ADEQUATE. POTENTIAL: STILL UNMEASURED."
+"YOU FIGHT LIKE A SPECIES THAT HAS NEVER LOST EVERYTHING."
+"THE SCORE DOES NOT CONCERN ME. YOUR METHOD DOES."
+
+// Ithalokk — during Gravity/Chaos Events (unpredictable, gleeful)
+"OH. OH THIS IS NEW."
+"I ONCE WATCHED A CIVILIZATION DEVELOP FASTER-THAN-LIGHT TRAVEL IN THE TIME IT
+ TOOK ANOTHER TO LOSE AT THIS GAME. BOTH WERE DELIGHTFUL."
+"LET ME SHOW YOU HOW IT IS PLAYED." // [takes control of player capsule for 3s]
+"YOUR GHOST IS MORE INTERESTING THAN YOU ARE. IMPROVE."
+
+// Nexari Ambassador (tutorial) — neutral, formal
+"THE RULES WERE DESIGNED SPECIFICALLY TO DEFEAT YOU.
+ THIS IS NOT CRUELTY. IT IS RESPECT."
+```
+
+---
+
+### 22.6 — VISUAL DESIGN DIRECTION FOR THE THREE
+
+```typescript
+// D'Anielor Kasthellanox — procedural mesh generation guide
+// Head: Babylon.js SphereGeometry, black emissive, procedural star-map texture (SVG lines)
+// Body: angular CylinderGeometry stack with BoxGeometry plates — formal suit in crystal-black
+// Signature particle: sparse gold dust drifting upward (ParticleFactory.AMBIENT_GOLD)
+// Animation: all movements are LINEAR tween — no ease, no acceleration. Cold machine.
+
+// Xebasthiaan Du'Qae — procedural mesh generation guide
+// Body: TransparentCapsuleGeometry with amber interior glow (PointLight inside)
+// Floats 0.33 units above any surface — never grounded
+// Particle: electromagnetic discharge arcs (short, white, 2-frame duration)
+// Animation: slow vertical rotation when idle; sharp 90° snaps when addressing player
+
+// Ithalokk Kapas'SOX — procedural mesh generation guide
+// Render: 4x the same mesh with offset positions (0, 0.05, 0.1, 0.15 units)
+// Each copy: different opacity (1.0, 0.7, 0.4, 0.2) and slight hue rotation
+// Body base: organic blob (IcoSphereGeometry with noise displacement)
+// Particles: purple-to-cyan color-shifting — most dense during Chaos Events
+// Animation: all 4 copies drift slightly independently via perlin noise offset
+```
+
+---
+
+### 22.7 — ACCEPTANCE CHECKLIST ADDENDUM (Narrative)
+
+- [ ] D'Anielor, Xebasthiaan, and Ithalokk are visually and narratively distinct
+- [ ] Each of The Three has at least 3 dialogue lines in the final game
+- [ ] Ithalokk's "Ghost Hands" appear in DarkShot at least once per match
+- [ ] Xebasthiaan's floating hologram is present in the FluxArena/GRAVUMO arena
+- [ ] D'Anielor's Eye of the Void icon appears on the HUD during FluxEngine mutation reveals
+- [ ] GRAVUMO mechanics (Impact Mass + Nexari Blow) are distinct from base FluxArena push
+- [ ] VOID VOLLEY corridor shows parallel universe wall fragments in background
+- [ ] Results screen shows "Previous Human Competitions Observed by the Nexari" with links
+- [ ] All three villain names appear in the credits as "Nexari Judges"
+- [ ] The Mars destruction is referenced in the IntroScene narrative
+- [ ] Dialogue samples from Section 22.5 are implemented in appropriate scenes
+```
 
 ---
 
