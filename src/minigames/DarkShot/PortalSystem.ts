@@ -98,6 +98,7 @@ export class PortalSystem {
       portal.position.x += (Math.random() - 0.5) * driftSpeed * deltaTime;
       portal.position.z += (Math.random() - 0.5) * driftSpeed * deltaTime;
       portal.mesh.position.copyFrom(portal.position);
+      portal.ringMesh.position.copyFrom(portal.position);
     }
   }
 
