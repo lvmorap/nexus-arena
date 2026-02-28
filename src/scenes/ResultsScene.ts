@@ -297,6 +297,22 @@ export class ResultsScene {
       if (this._onRestart) this._onRestart();
     });
     panel.addControl(menuBtn);
+
+    // Credits with Nexari Judges
+    const creditsSpacer = new Rectangle('creditsSpacer');
+    creditsSpacer.height = '20px';
+    creditsSpacer.thickness = 0;
+    panel.addControl(creditsSpacer);
+
+    const creditsText = new TextBlock('credits');
+    creditsText.text =
+      'NEXARI JUDGES: D\'Anielor Kasthellanox · Xebasthiaan Du\'Qae · Ithalokk Kapas\'Sox';
+    creditsText.color = COLORS.NEUTRAL;
+    creditsText.fontSize = 11;
+    creditsText.fontFamily = 'Rajdhani, sans-serif';
+    creditsText.height = '20px';
+    creditsText.alpha = 0.4;
+    panel.addControl(creditsText);
   }
 
   public dispose(): void {

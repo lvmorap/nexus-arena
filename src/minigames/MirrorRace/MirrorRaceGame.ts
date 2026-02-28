@@ -77,6 +77,7 @@ export class MirrorRaceGame {
   private _announcementText!: TextBlock;
   private _instructionText!: TextBlock;
   private _scoreText!: TextBlock;
+  private _commentaryText!: TextBlock;
 
   // Countdown
   private _countdownActive = false;
@@ -380,6 +381,16 @@ export class MirrorRaceGame {
     this._instructionText.top = '46%';
     this._instructionText.alpha = 0.7;
     this._guiTexture.addControl(this._instructionText);
+
+    // Ithalokk commentary
+    this._commentaryText = new TextBlock('commentary');
+    this._commentaryText.text = '';
+    this._commentaryText.color = COLORS.NEXARI_PURPLE;
+    this._commentaryText.fontSize = 14;
+    this._commentaryText.fontFamily = 'Rajdhani, sans-serif';
+    this._commentaryText.top = '8%';
+    this._commentaryText.alpha = 0;
+    this._guiTexture.addControl(this._commentaryText);
   }
 
   private _startCountdown(): void {
@@ -559,6 +570,16 @@ export class MirrorRaceGame {
         this._score.crashes++;
         this._playerSpeed = Math.max(6, this._playerSpeed - 1);
         this._showAnnouncement('CRASH!', COLORS.DANGER);
+
+        // Ithalokk on crashes
+        if (this._score.crashes === 1) {
+          this._commentaryText.text = '"OH. OH THIS IS NEW." — ITHALOKK';
+          this._commentaryText.alpha = 0.7;
+          const t = setTimeout(() => {
+            this._commentaryText.alpha = 0;
+          }, 2500);
+          this._activeTimeouts.push(t);
+        }
       } else {
         // Dodged - check if pattern break
         const dodgedSide = this._playerX > obs.position.x ? 1 : -1;
@@ -571,6 +592,15 @@ export class MirrorRaceGame {
           this._score.player += 1;
           this._showAnnouncement('PATTERN BREAK! +1', COLORS.SUCCESS);
           obs.dodgedCorrectly = true;
+
+          // Ithalokk commentary on pattern breaks
+          this._commentaryText.text =
+            '"YOUR GHOST IS MORE INTERESTING THAN YOU ARE. IMPROVE." — ITHALOKK';
+          this._commentaryText.alpha = 0.7;
+          const t = setTimeout(() => {
+            this._commentaryText.alpha = 0;
+          }, 3000);
+          this._activeTimeouts.push(t);
         }
       }
     }
