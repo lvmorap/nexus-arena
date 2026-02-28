@@ -67,9 +67,15 @@ export class SettingsPanel {
     panel.addControl(title);
 
     // Volume sliders
-    this._addSlider(panel, 'Master Volume', 1.0, (v) => this._audio.setMasterVolume(v));
-    this._addSlider(panel, 'Music Volume', 0.7, (v) => this._audio.setMusicVolume(v));
-    this._addSlider(panel, 'SFX Volume', 1.0, (v) => this._audio.setSfxVolume(v));
+    this._addSlider(panel, 'Master Volume', this._audio.masterVolume, (v) =>
+      this._audio.setMasterVolume(v),
+    );
+    this._addSlider(panel, 'Music Volume', this._audio.musicVolume, (v) =>
+      this._audio.setMusicVolume(v),
+    );
+    this._addSlider(panel, 'SFX Volume', this._audio.sfxVolume, (v) =>
+      this._audio.setSfxVolume(v),
+    );
 
     // Spacer
     const spacer = new Rectangle('settingsSpacer');

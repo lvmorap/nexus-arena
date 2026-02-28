@@ -9,6 +9,7 @@ import {
 import { Scene } from '@babylonjs/core';
 import { COLORS } from '../constants/Colors';
 import { logger } from '../utils/Logger';
+import { controlRemapper } from './ControlRemapper';
 
 export class PauseOverlay {
   private _gui: AdvancedDynamicTexture;
@@ -16,16 +17,19 @@ export class PauseOverlay {
   private _isPaused = false;
   private _keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private _onResume: () => void;
+  private _onPause: () => void;
   private _onSettings: () => void;
   private _onQuit: () => void;
 
   constructor(
     scene: Scene,
     onResume: () => void,
+    onPause: () => void,
     onSettings: () => void,
     onQuit: () => void,
   ) {
     this._onResume = onResume;
+    this._onPause = onPause;
     this._onSettings = onSettings;
     this._onQuit = onQuit;
 
@@ -35,7 +39,7 @@ export class PauseOverlay {
     this._gui.addControl(this._container);
 
     this._keyHandler = (e: KeyboardEvent): void => {
-      if (e.code === 'Escape') {
+      if (e.code === 'Escape' && !controlRemapper.isVisible) {
         this.toggle();
       }
     };
@@ -134,6 +138,7 @@ export class PauseOverlay {
   public show(): void {
     this._container.isVisible = true;
     this._isPaused = true;
+    this._onPause();
   }
 
   public hide(): void {

@@ -351,6 +351,18 @@ export class AudioManager {
     return this._muted;
   }
 
+  public get masterVolume(): number {
+    return this._masterVolume;
+  }
+
+  public get musicVolume(): number {
+    return this._musicVolume;
+  }
+
+  public get sfxVolume(): number {
+    return this._sfxVolume;
+  }
+
   public dispose(): void {
     try {
       this._stopMusicImmediate();

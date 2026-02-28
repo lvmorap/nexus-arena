@@ -310,6 +310,9 @@ class NexusArena {
         }
       },
       () => {
+        this._engine.paused = true;
+      },
+      () => {
         if (!this._pauseSettings) {
           this._pauseSettings = new SettingsPanel(scene, this._audio);
         }
@@ -320,12 +323,6 @@ class NexusArena {
         this._showMenu();
       },
     );
-    // Override toggle to sync Engine.paused
-    const origShow = this._pauseOverlay.show.bind(this._pauseOverlay);
-    this._pauseOverlay.show = (): void => {
-      origShow();
-      this._engine.paused = true;
-    };
   }
 
   private _disposePauseOverlay(): void {
