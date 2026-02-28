@@ -16,6 +16,7 @@ import { Engine } from '../../core/Engine';
 import { InputManager, InputState } from '../../core/InputManager';
 import { NexariAdaptiveAI } from '../../ai/NexariAdaptiveAI';
 import { RuleMutator, FluxEventType } from './RuleMutator';
+import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, distanceXZ } from '../../utils/MathUtils';
@@ -83,14 +84,63 @@ export class FluxArenaGame {
   private _countdownActive = false;
   private _countdownStartTime = 0;
 
-  constructor(engine: Engine, input: InputManager) {
+  // Mutations from previous round
+  private _mutations: RuleMutation[];
+  private _roundNumber: number;
+  private _pushPowerMultiplier = 1;
+  private _fluxEventIntervalMs: number;
+
+  constructor(
+    engine: Engine,
+    input: InputManager,
+    mutations: RuleMutation[] = [],
+    roundNumber = 1
+  ) {
     this._engine = engine;
     this._input = input;
-    this._ai = new NexariAdaptiveAI(GAME_CONFIG.FLUX_ARENA.AI_REACTION_MS);
+    this._mutations = mutations;
+    this._roundNumber = roundNumber;
+
+    // Scale AI difficulty per round
+    const reactionMs = Math.max(200, GAME_CONFIG.FLUX_ARENA.AI_REACTION_MS - (roundNumber - 1) * 80);
+    this._ai = new NexariAdaptiveAI(reactionMs);
     this._ruleMutator = new RuleMutator();
     this._arenaRadius = GAME_CONFIG.FLUX_ARENA.ARENA_RADIUS;
+    this._pushPowerMultiplier = 1;
+    this._fluxEventIntervalMs = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
+
+    // Apply mutations
+    this._applyMutations();
+
     this._scene = new Scene(this._engine.babylonEngine);
     this._scene.clearColor = new Color4(0.02, 0.01, 0.05, 1);
+  }
+
+  private _applyMutations(): void {
+    for (const mut of this._mutations) {
+      switch (mut.effect) {
+        case 'ARENA_SHRINK_INITIAL':
+          this._arenaRadius *= 0.9;
+          logger.info(`Mutation applied: Arena shrunk to radius ${this._arenaRadius.toFixed(1)}`);
+          break;
+        case 'PUSH_NERF':
+          this._pushPowerMultiplier *= 0.8;
+          logger.info('Mutation applied: Push power reduced by 20%');
+          break;
+        case 'FASTER_FLUX':
+          this._fluxEventIntervalMs *= 0.7;
+          logger.info(
+            `Mutation applied: Flux events every ${(this._fluxEventIntervalMs / 1000).toFixed(1)}s`
+          );
+          break;
+        case 'CENTER_WEAKNESS':
+          // Applied dynamically during push calculations
+          logger.info('Mutation applied: Center position weakens push power');
+          break;
+        default:
+          break;
+      }
+    }
   }
 
   public get scene(): Scene {
@@ -307,6 +357,28 @@ export class FluxArenaGame {
     this._instructionText.top = '46%';
     this._instructionText.alpha = 0.7;
     this._guiTexture.addControl(this._instructionText);
+
+    // Round indicator
+    const roundText = new TextBlock('round');
+    roundText.text = `ROUND ${this._roundNumber}`;
+    roundText.color = COLORS.NEXARI_GOLD;
+    roundText.fontSize = 20;
+    roundText.fontFamily = 'Orbitron, sans-serif';
+    roundText.top = '-48%';
+    roundText.alpha = 0.8;
+    this._guiTexture.addControl(roundText);
+
+    // Show active mutations from previous round
+    if (this._mutations.length > 0) {
+      const mutInfo = new TextBlock('activeMutations');
+      mutInfo.text = this._mutations.map((m) => `[${m.displayName}]`).join('  ');
+      mutInfo.color = COLORS.AI_MAGENTA;
+      mutInfo.fontSize = 14;
+      mutInfo.fontFamily = 'Rajdhani, sans-serif';
+      mutInfo.top = '43%';
+      mutInfo.alpha = 0.6;
+      this._guiTexture.addControl(mutInfo);
+    }
   }
 
   private _startCountdown(): void {
@@ -364,7 +436,7 @@ export class FluxArenaGame {
     this._activeEffects = this._activeEffects.filter((e) => e.expiresAt === 0 || now < e.expiresAt);
 
     // Trigger flux events
-    if (now - this._lastFluxEventTime > GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS) {
+    if (now - this._lastFluxEventTime > this._fluxEventIntervalMs) {
       this._triggerFluxEvent();
       this._lastFluxEventTime = now;
     }
@@ -474,7 +546,16 @@ export class FluxArenaGame {
     if (dist > 5) return; // Too far
 
     direction.normalize();
-    const power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * (1 - dist / 8);
+    let power = GAME_CONFIG.FLUX_ARENA.PUSH_POWER * this._pushPowerMultiplier * (1 - dist / 8);
+
+    // CENTER_WEAKNESS mutation: reduce push power when near center
+    if (this._hasMutationEffect('CENTER_WEAKNESS')) {
+      const playerDist = distanceXZ(this._playerMesh.position, Vector3.Zero());
+      if (playerDist < this._arenaRadius * 0.3) {
+        power *= 0.6;
+      }
+    }
+
     this._aiVelocity.addInPlace(direction.scale(power));
 
     // Small self knockback
@@ -595,6 +676,10 @@ export class FluxArenaGame {
 
   private _hasEffect(type: FluxEventType): boolean {
     return this._activeEffects.some((e) => e.type === type);
+  }
+
+  private _hasMutationEffect(effect: string): boolean {
+    return this._mutations.some((m) => m.effect === effect);
   }
 
   private _updateRulesDisplay(): void {

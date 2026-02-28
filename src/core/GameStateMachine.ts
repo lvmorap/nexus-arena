@@ -9,7 +9,9 @@ export type GamePhase =
   | 'FLUX_ARENA'
   | 'TRANSITION'
   | 'RESULTS'
-  | 'PAUSED';
+  | 'PAUSED'
+  | 'DARK_SHOT'
+  | 'MIRROR_RACE';
 
 export type PhaseChangeListener = (from: GamePhase, to: GamePhase) => void;
 
