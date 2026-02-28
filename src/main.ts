@@ -7,6 +7,7 @@ import { GameStateMachine } from './core/GameStateMachine';
 import { InputManager } from './core/InputManager';
 import { FluxEngine } from './ai/FluxEngine';
 import { MenuScene } from './scenes/MenuScene';
+import { IntroScene } from './scenes/IntroScene';
 import { TransitionScene } from './scenes/TransitionScene';
 import { ResultsScene } from './scenes/ResultsScene';
 import { DarkShotGame, DarkShotScore } from './minigames/DarkShot/DarkShotGame';
@@ -29,6 +30,7 @@ class NexusArena {
 
   // Active scenes (only one at a time)
   private _menuScene: MenuScene | null = null;
+  private _introScene: IntroScene | null = null;
   private _darkShotGame: DarkShotGame | null = null;
   private _transitionScene: TransitionScene | null = null;
   private _fluxArenaGame: FluxArenaGame | null = null;
@@ -63,9 +65,22 @@ class NexusArena {
     this._stateMachine.transitionTo('MENU');
     this._menuScene = new MenuScene(this._engine);
     this._menuScene.setup(() => {
-      this._startDarkShot();
+      this._showIntro();
     });
     this._engine.setScene(this._menuScene.scene);
+  }
+
+  /* ---- INTRO ---- */
+
+  private _showIntro(): void {
+    this._disposeCurrentScenes();
+
+    this._stateMachine.transitionTo('INTRO');
+    this._introScene = new IntroScene(this._engine);
+    this._introScene.setup(() => {
+      this._startDarkShot();
+    });
+    this._engine.setScene(this._introScene.scene);
   }
 
   /* ---- ROUND 1: DARK SHOT ---- */
@@ -238,6 +253,10 @@ class NexusArena {
     if (this._menuScene) {
       this._menuScene.dispose();
       this._menuScene = null;
+    }
+    if (this._introScene) {
+      this._introScene.dispose();
+      this._introScene = null;
     }
     if (this._darkShotGame) {
       this._darkShotGame.dispose();
