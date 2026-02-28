@@ -23,6 +23,7 @@ import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, distanceXZ } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
+import { accessibility } from '../../utils/AccessibilityManager';
 
 export interface FluxArenaScore {
   player: number;
@@ -94,6 +95,11 @@ export class FluxArenaGame {
   private _playerInvisibilityCharges = 0;
   private _hasCenterWeakness = false;
   private _fluxEventInterval: number = GAME_CONFIG.FLUX_ARENA.FLUX_EVENT_INTERVAL_MS;
+
+  // Rule overlay
+  private _ruleOverlay: TextBlock | null = null;
+  private _ruleOverlayVisible = false;
+  private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(engine: Engine, input: InputManager, initialMutations: RuleMutation[] = []) {
     this._engine = engine;
@@ -372,6 +378,26 @@ export class FluxArenaGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    this._ruleOverlay = new TextBlock('ruleOverlay');
+    this._ruleOverlay.text = 'FLUX ARENA RULES:\n• Push opponents off the platform (+2 pts)\n• Stay on the platform to survive\n• Flux Events change rules every 20s\n• Self-KO costs -1 point\n\nPress ? to close';
+    this._ruleOverlay.color = COLORS.NEXARI_CYAN;
+    this._ruleOverlay.fontSize = 18;
+    this._ruleOverlay.fontFamily = 'Rajdhani, sans-serif';
+    this._ruleOverlay.textWrapping = true;
+    this._ruleOverlay.lineSpacing = '8px';
+    this._ruleOverlay.isVisible = false;
+    this._guiTexture.addControl(this._ruleOverlay);
+
+    this._ruleKeyHandler = (e: KeyboardEvent): void => {
+      if (e.key === '?') {
+        this._ruleOverlayVisible = !this._ruleOverlayVisible;
+        if (this._ruleOverlay) {
+          this._ruleOverlay.isVisible = this._ruleOverlayVisible;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._ruleKeyHandler);
   }
 
   private _startCountdown(): void {
@@ -542,9 +568,11 @@ export class FluxArenaGame {
     this._checkFallOff('player', ruleReversal);
     this._checkFallOff('ai', ruleReversal);
 
-    const shakeOffset = this._screenShake.update(dt * 1000);
-    if (shakeOffset.length() > 0) {
-      this._camera.position.addInPlace(shakeOffset);
+    if (!accessibility.isReducedMotion) {
+      const shakeOffset = this._screenShake.update(dt * 1000);
+      if (shakeOffset.length() > 0) {
+        this._camera.position.addInPlace(shakeOffset);
+      }
     }
 
     // Update UI
@@ -792,6 +820,7 @@ export class FluxArenaGame {
   }
 
   public dispose(): void {
+    if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }

@@ -20,6 +20,7 @@ import { COLORS } from '../../constants/Colors';
 import { GAME_CONFIG } from '../../constants/GameConfig';
 import { hexToRgb, randomRange, clamp } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
+import { accessibility } from '../../utils/AccessibilityManager';
 
 export interface DarkShotScore {
   player: number;
@@ -37,6 +38,7 @@ interface Orb {
   light: PointLight;
   isCue: boolean;
   isActive: boolean;
+  cbShape?: Mesh;
 }
 
 interface Portal {
@@ -108,6 +110,11 @@ export class DarkShotGame {
   private _activeSquashes: { mesh: Mesh; startTime: number; dur: number }[] = [];
   private _screenShake = new ScreenShake();
 
+  // Rule overlay
+  private _ruleOverlay: TextBlock | null = null;
+  private _ruleOverlayVisible = false;
+  private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
   // Config shortcut
   private readonly _cfg = GAME_CONFIG.DARK_SHOT;
 
@@ -130,6 +137,7 @@ export class DarkShotGame {
     this._buildOrbs();
     this._buildUI();
     this._setupPointerInput();
+    this._setupAccessibility();
     this._startCountdown();
 
     this._scene.registerBeforeRender(() => {
@@ -356,7 +364,28 @@ export class DarkShotGame {
     }
     light.range = 6;
 
-    return { mesh, velocity: Vector3.Zero(), light, isCue, isActive: true };
+    const cbShape = this._createColorBlindShape(`${name}_cb`, isCue, radius);
+    cbShape.parent = mesh;
+    cbShape.position.y = radius + 0.2;
+    cbShape.isVisible = accessibility.isColorBlind;
+
+    return { mesh, velocity: Vector3.Zero(), light, isCue, isActive: true, cbShape };
+  }
+
+  private _createColorBlindShape(name: string, isCue: boolean, orbRadius: number): Mesh {
+    const size = orbRadius * 1.5;
+    let shape: Mesh;
+    if (isCue) {
+      shape = MeshBuilder.CreateBox(name, { size: size * 0.5 }, this._scene);
+      shape.rotation.y = Math.PI / 4;
+    } else {
+      shape = MeshBuilder.CreateCylinder(name, { height: 0.1, diameter: size, tessellation: 3 }, this._scene);
+    }
+    const mat = new StandardMaterial(`${name}Mat`, this._scene);
+    mat.emissiveColor = new Color3(1, 1, 1);
+    mat.disableLighting = true;
+    shape.material = mat;
+    return shape;
   }
 
   /* ------------------------------------------------------------------ */
@@ -418,6 +447,36 @@ export class DarkShotGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    this._ruleOverlay = new TextBlock('ruleOverlay');
+    this._ruleOverlay.text = 'DARK SHOT RULES:\n• Drag from the cue orb to aim and shoot\n• Pocket orbs into portals to score\n• Blind portals (no light): +3\n• Shadow portals: +2\n• Lit portals: +1\n• Pocketing the cue orb is a scratch (-1)\n\nPress ? to close';
+    this._ruleOverlay.color = COLORS.NEXARI_CYAN;
+    this._ruleOverlay.fontSize = 18;
+    this._ruleOverlay.fontFamily = 'Rajdhani, sans-serif';
+    this._ruleOverlay.textWrapping = true;
+    this._ruleOverlay.lineSpacing = '8px';
+    this._ruleOverlay.isVisible = false;
+    this._guiTexture.addControl(this._ruleOverlay);
+  }
+
+  private _setupAccessibility(): void {
+    accessibility.onColorBlindChange(() => {
+      for (const orb of this._orbs) {
+        if (orb.cbShape) {
+          orb.cbShape.isVisible = accessibility.isColorBlind;
+        }
+      }
+    });
+
+    this._ruleKeyHandler = (e: KeyboardEvent): void => {
+      if (e.key === '?') {
+        this._ruleOverlayVisible = !this._ruleOverlayVisible;
+        if (this._ruleOverlay) {
+          this._ruleOverlay.isVisible = this._ruleOverlayVisible;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._ruleKeyHandler);
   }
 
   /* ------------------------------------------------------------------ */
@@ -611,9 +670,11 @@ export class DarkShotGame {
 
     this._updateSquashStretch();
 
-    const shakeOffset = this._screenShake.update(dt * 1000);
-    if (shakeOffset.length() > 0) {
-      this._camera.position.addInPlace(shakeOffset);
+    if (!accessibility.isReducedMotion) {
+      const shakeOffset = this._screenShake.update(dt * 1000);
+      if (shakeOffset.length() > 0) {
+        this._camera.position.addInPlace(shakeOffset);
+      }
     }
 
     this._updateUI();
@@ -631,6 +692,11 @@ export class DarkShotGame {
   }
 
   private _updateSquashStretch(): void {
+    if (accessibility.isReducedMotion) {
+      this._activeSquashes.forEach((s) => { s.mesh.scaling = new Vector3(1, 1, 1); });
+      this._activeSquashes = [];
+      return;
+    }
     const now = performance.now();
     this._activeSquashes = this._activeSquashes.filter((s) => {
       const t = (now - s.startTime) / s.dur;
@@ -1030,6 +1096,7 @@ export class DarkShotGame {
     if (this._pointerDownHandler) canvas.removeEventListener('pointerdown', this._pointerDownHandler);
     if (this._pointerMoveHandler) canvas.removeEventListener('pointermove', this._pointerMoveHandler);
     if (this._pointerUpHandler) canvas.removeEventListener('pointerup', this._pointerUpHandler);
+    if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }

@@ -18,6 +18,7 @@ import { FluxArenaGame, FluxArenaScore } from './minigames/FluxArena/FluxArenaGa
 import { MirrorRaceGame, MirrorRaceScore } from './minigames/MirrorRace/MirrorRaceGame';
 import { GhostRecorder } from './minigames/MirrorRace/GhostRecorder';
 import { logger } from './utils/Logger';
+import { accessibility } from './utils/AccessibilityManager';
 
 class NexusArena {
   private _engine: Engine;
@@ -56,6 +57,7 @@ class NexusArena {
 
   public async start(): Promise<void> {
     logger.info('NEXUS ARENA starting...');
+    logger.info(`Accessibility: reducedMotion=${accessibility.isReducedMotion}`);
     this._showBoot();
   }
 

@@ -22,6 +22,7 @@ import { RuleMutation } from '../../ai/FluxEngine';
 import { COLORS } from '../../constants/Colors';
 import { hexToRgb, clamp } from '../../utils/MathUtils';
 import { logger } from '../../utils/Logger';
+import { accessibility } from '../../utils/AccessibilityManager';
 
 export interface MirrorRaceScore {
   player: number;
@@ -89,6 +90,11 @@ export class MirrorRaceGame {
   // Timers for cleanup
   private _activeIntervals: ReturnType<typeof setInterval>[] = [];
   private _activeTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+  // Rule overlay
+  private _ruleOverlay: TextBlock | null = null;
+  private _ruleOverlayVisible = false;
+  private _ruleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   private _onComplete: ((score: MirrorRaceScore) => void) | null = null;
 
@@ -406,6 +412,26 @@ export class MirrorRaceGame {
     this._commentaryText.top = '8%';
     this._commentaryText.alpha = 0;
     this._guiTexture.addControl(this._commentaryText);
+
+    this._ruleOverlay = new TextBlock('ruleOverlay');
+    this._ruleOverlay.text = 'MIRROR RACE RULES:\n• Race against your own ghost\n• A/D or ←/→ to steer\n• Dodge barriers to avoid crashes\n• Break your pattern for bonus points (+1)\n• Flux portals warp you forward (+1)\n• Clean run bonus: +2\n\nPress ? to close';
+    this._ruleOverlay.color = COLORS.NEXARI_CYAN;
+    this._ruleOverlay.fontSize = 18;
+    this._ruleOverlay.fontFamily = 'Rajdhani, sans-serif';
+    this._ruleOverlay.textWrapping = true;
+    this._ruleOverlay.lineSpacing = '8px';
+    this._ruleOverlay.isVisible = false;
+    this._guiTexture.addControl(this._ruleOverlay);
+
+    this._ruleKeyHandler = (e: KeyboardEvent): void => {
+      if (e.key === '?') {
+        this._ruleOverlayVisible = !this._ruleOverlayVisible;
+        if (this._ruleOverlay) {
+          this._ruleOverlay.isVisible = this._ruleOverlayVisible;
+        }
+      }
+    };
+    window.addEventListener('keydown', this._ruleKeyHandler);
   }
 
   private _startCountdown(): void {
@@ -490,9 +516,11 @@ export class MirrorRaceGame {
     // Check finish
     this._checkFinish(elapsed);
 
-    const shakeOffset = this._screenShake.update(dt * 1000);
-    if (shakeOffset.length() > 0) {
-      this._camera.position.addInPlace(shakeOffset);
+    if (!accessibility.isReducedMotion) {
+      const shakeOffset = this._screenShake.update(dt * 1000);
+      if (shakeOffset.length() > 0) {
+        this._camera.position.addInPlace(shakeOffset);
+      }
     }
 
     // Update UI
@@ -740,6 +768,7 @@ export class MirrorRaceGame {
       clearTimeout(timeout);
     }
     this._activeTimeouts = [];
+    if (this._ruleKeyHandler) window.removeEventListener('keydown', this._ruleKeyHandler);
     this._guiTexture.dispose();
     this._scene.dispose();
   }
