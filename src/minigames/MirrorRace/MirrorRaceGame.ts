@@ -81,6 +81,10 @@ export class MirrorRaceGame {
   private _countdownActive = false;
   private _countdownStartTime = 0;
 
+  // Timers for cleanup
+  private _activeIntervals: ReturnType<typeof setInterval>[] = [];
+  private _activeTimeouts: ReturnType<typeof setTimeout>[] = [];
+
   private _onComplete: ((score: MirrorRaceScore) => void) | null = null;
 
   constructor(engine: Engine, input: InputManager, ghostRecorder: GhostRecorder, playerLaneBias = 0) {
@@ -375,6 +379,7 @@ export class MirrorRaceGame {
         this._startRace();
       }
     }, 100);
+    this._activeIntervals.push(interval);
   }
 
   private _startRace(): void {
@@ -597,11 +602,12 @@ export class MirrorRaceGame {
       this._score.player > this._score.ai ? COLORS.SUCCESS : COLORS.DANGER
     );
 
-    setTimeout(() => {
+    const endTimeout = setTimeout(() => {
       if (this._onComplete) {
         this._onComplete(this._score);
       }
     }, 3000);
+    this._activeTimeouts.push(endTimeout);
   }
 
   private _showAnnouncement(text: string, color: string): void {
@@ -619,6 +625,7 @@ export class MirrorRaceGame {
         this._announcementText.alpha = alpha;
       }
     }, 50);
+    this._activeIntervals.push(fadeInterval);
   }
 
   private _updateUI(elapsed: number): void {
@@ -641,6 +648,14 @@ export class MirrorRaceGame {
   }
 
   public dispose(): void {
+    for (const interval of this._activeIntervals) {
+      clearInterval(interval);
+    }
+    this._activeIntervals = [];
+    for (const timeout of this._activeTimeouts) {
+      clearTimeout(timeout);
+    }
+    this._activeTimeouts = [];
     this._guiTexture.dispose();
     this._scene.dispose();
   }

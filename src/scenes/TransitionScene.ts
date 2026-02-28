@@ -25,6 +25,8 @@ export class TransitionScene {
   private _scene: Scene;
   private _engine: Engine;
   private _guiTexture!: AdvancedDynamicTexture;
+  private _keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private _clickHandler: (() => void) | null = null;
 
   constructor(engine: Engine) {
     this._engine = engine;
@@ -239,25 +241,36 @@ export class TransitionScene {
     }, revealDelay);
 
     // Input handling
-    const keyHandler = (e: KeyboardEvent): void => {
+    this._keyHandler = (e: KeyboardEvent): void => {
       if (!canContinue) return;
       if (e.code === 'Space' || e.code === 'Enter') {
-        window.removeEventListener('keydown', keyHandler);
+        this._removeInputHandlers();
         onContinue();
       }
     };
-    window.addEventListener('keydown', keyHandler);
+    window.addEventListener('keydown', this._keyHandler);
 
-    const clickHandler = (): void => {
+    this._clickHandler = (): void => {
       if (!canContinue) return;
-      this._engine.canvas.removeEventListener('click', clickHandler);
-      window.removeEventListener('keydown', keyHandler);
+      this._removeInputHandlers();
       onContinue();
     };
-    this._engine.canvas.addEventListener('click', clickHandler);
+    this._engine.canvas.addEventListener('click', this._clickHandler);
+  }
+
+  private _removeInputHandlers(): void {
+    if (this._keyHandler) {
+      window.removeEventListener('keydown', this._keyHandler);
+      this._keyHandler = null;
+    }
+    if (this._clickHandler) {
+      this._engine.canvas.removeEventListener('click', this._clickHandler);
+      this._clickHandler = null;
+    }
   }
 
   public dispose(): void {
+    this._removeInputHandlers();
     this._guiTexture.dispose();
     this._scene.dispose();
   }
