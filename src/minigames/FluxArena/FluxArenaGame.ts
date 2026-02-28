@@ -483,6 +483,7 @@ export class FluxArenaGame {
 
   private _update(dt: number): void {
     if (this._countdownActive || !this._isRunning) return;
+    if (this._engine.isPaused) return;
 
     const now = performance.now();
     this._matchTimeRemaining = GAME_CONFIG.FLUX_ARENA.MATCH_DURATION_MS - (now - this._matchStartTime);

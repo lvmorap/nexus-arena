@@ -650,6 +650,7 @@ export class DarkShotGame {
 
   private _update(dt: number): void {
     if (this._phase === 'countdown' || this._phase === 'ended') return;
+    if (this._engine.isPaused) return;
 
     const now = performance.now();
 

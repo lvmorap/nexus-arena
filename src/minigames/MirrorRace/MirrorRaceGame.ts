@@ -475,6 +475,7 @@ export class MirrorRaceGame {
 
   private _update(dt: number): void {
     if (this._countdownActive || !this._isRunning) return;
+    if (this._engine.isPaused) return;
 
     const elapsed = performance.now() - this._matchStartTime;
 

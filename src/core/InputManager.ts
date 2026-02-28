@@ -1,3 +1,5 @@
+import { controlRemapper } from '../ui/ControlRemapper';
+
 export interface InputState {
   moveForward: boolean;
   moveBack: boolean;
@@ -48,11 +50,12 @@ export class InputManager {
   }
 
   public getState(): InputState {
+    const b = controlRemapper.bindings;
     const state: InputState = {
-      moveForward: this._keys.has('KeyW') || this._keys.has('ArrowUp'),
-      moveBack: this._keys.has('KeyS') || this._keys.has('ArrowDown'),
-      moveLeft: this._keys.has('KeyA') || this._keys.has('ArrowLeft'),
-      moveRight: this._keys.has('KeyD') || this._keys.has('ArrowRight'),
+      moveForward: this._keys.has(b.moveForward) || this._keys.has('ArrowUp'),
+      moveBack: this._keys.has(b.moveBack) || this._keys.has('ArrowDown'),
+      moveLeft: this._keys.has(b.moveLeft) || this._keys.has('ArrowLeft'),
+      moveRight: this._keys.has(b.moveRight) || this._keys.has('ArrowRight'),
       push: this._pushTriggered,
       confirm: this._confirmTriggered,
       escape: this._escapeTriggered,
