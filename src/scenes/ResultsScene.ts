@@ -208,7 +208,51 @@ export class ResultsScene {
       debriefText.height = '35px';
       debriefText.alpha = 0.9;
       panel.addControl(debriefText);
+
+      // D'Anielor quote
+      const danielorQuote = new TextBlock('danielorQuote');
+      danielorQuote.text =
+        '"PREDICTABILITY IS A FORM OF SURRENDER." — D\'ANIELOR KASTHELLANOX';
+      danielorQuote.color = COLORS.NEXARI_GOLD;
+      danielorQuote.fontSize = 13;
+      danielorQuote.fontFamily = 'Rajdhani, sans-serif';
+      danielorQuote.height = '25px';
+      danielorQuote.alpha = 0.6;
+      panel.addControl(danielorQuote);
     }
+
+    // Previous Human Competitions section
+    const prevSpacer = new Rectangle('prevSpacer');
+    prevSpacer.height = '15px';
+    prevSpacer.thickness = 0;
+    panel.addControl(prevSpacer);
+
+    const prevHeader = new TextBlock('prevHeader');
+    prevHeader.text = 'PREVIOUS HUMAN COMPETITIONS OBSERVED BY THE NEXARI:';
+    prevHeader.color = COLORS.SUCCESS;
+    prevHeader.fontSize = 12;
+    prevHeader.fontFamily = 'Rajdhani, monospace';
+    prevHeader.height = '25px';
+    prevHeader.alpha = 0.7;
+    panel.addControl(prevHeader);
+
+    const prevBlind = new TextBlock('prevBlind');
+    prevBlind.text = '→ Experiment #7,441-B: Blind Pool in Darkness   [BLIND BREAK]';
+    prevBlind.color = COLORS.SUCCESS;
+    prevBlind.fontSize = 11;
+    prevBlind.fontFamily = 'Rajdhani, monospace';
+    prevBlind.height = '20px';
+    prevBlind.alpha = 0.5;
+    panel.addControl(prevBlind);
+
+    const prevFusion = new TextBlock('prevFusion');
+    prevFusion.text = '→ Experiment #7,441-C: Voluntary Rule Dissolution [FUSIONBOTS ARENA]';
+    prevFusion.color = COLORS.SUCCESS;
+    prevFusion.fontSize = 11;
+    prevFusion.fontFamily = 'Rajdhani, monospace';
+    prevFusion.height = '20px';
+    prevFusion.alpha = 0.5;
+    panel.addControl(prevFusion);
 
     // Spacer
     const spacer3 = new Rectangle('spacer3');

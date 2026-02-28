@@ -188,6 +188,20 @@ export class TransitionScene {
       mutHeader.height = '45px';
       panel.addControl(mutHeader);
 
+      // D'Anielor's dialogue during FluxEngine mutation reveal
+      const danielorText = new TextBlock('danielor');
+      danielorText.text = '"YOUR PATTERN IS NOTED. THE ARENA HAS BEEN INFORMED." — D\'ANIELOR';
+      danielorText.color = COLORS.NEXARI_GOLD;
+      danielorText.fontSize = 13;
+      danielorText.fontFamily = 'Rajdhani, sans-serif';
+      danielorText.height = '30px';
+      danielorText.alpha = 0;
+      panel.addControl(danielorText);
+
+      setTimeout(() => {
+        danielorText.alpha = 0.7;
+      }, 600);
+
       // Show mutations one by one with staggered delay
       for (let i = 0; i < mutations.length; i++) {
         const mut = mutations[i];
